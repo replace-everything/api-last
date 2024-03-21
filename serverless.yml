@@ -1,0 +1,92 @@
+# ./serverless.yml
+
+org: raesapi
+app: api
+service: mobile
+frameworkVersion: '3'
+
+plugins:
+  - serverless-offline
+  - serverless-plugin-warmup
+  - serverless-jest-plugin
+  - serverless-plugin-optimize
+  # - serverless-plugin-typescript
+
+provider:
+  name: aws
+  runtime: nodejs16.x
+  stage: ${opt:stage, "local"} # Default to "local" if not specified
+  environment:
+    BUCKET_NAME: raes-photos-dev
+    DB_CREDENTIALS_ARN: 'arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-${self:provider.stage}-'
+    NODE_ENV: ${self:provider.stage}
+  apiGateway:
+    binaryMediaTypes:
+      - '*/*'
+  vpc:
+    securityGroupIds:
+      - sg-01a3240ea5b7293f2 # rds-prod-security-group
+      - sg-06529264c65f469e1 # default security group
+    subnetIds:
+      - subnet-0af6ec35e3762ff4e
+      - subnet-0220b3a1b606454f7
+      - subnet-0583a77dce7f538d7
+      - subnet-0c78c6fb33cd18c32
+      - subnet-04b745d52ab07885b
+      - subnet-0de008bfd82f44f4d
+  iamRoleStatements:
+    - Effect: 'Allow'
+      Action:
+        - 'rds:*'
+        - 'secretsmanager:*'
+        - 's3:*'
+      Resource: '*'
+
+package:
+  individually: true
+  excludeDevDependencies: true
+  exclude:
+    - '**/*'
+    - 'node_modules/**'
+  include:
+    - 'dist/**'
+
+functions:
+  api:
+    handler: dist/bundle.handler
+    # handler: src/main.handler
+    timeout: 28
+    events:
+      - http:
+          method: any
+          path: /{proxy+}
+          cors: false
+  photoUpload:
+    handler: dist/photoUploader.handler
+    events:
+      - http:
+          path: /upload-photo
+          method: post
+          cors: true
+
+custom:
+  warmup:
+    enabled: true
+    prewarm: true
+    concurrency: 2
+    events:
+      - schedule: rate(5 minutes)
+    stages: ['production', 'staging']
+  jest:
+    collectCoverage: true
+    collectCoverageFrom: ['src/**/*.spec.ts']
+    clearMocks: true
+    moduleFileExtensions:
+      - ts
+      - tsx
+      - js
+      - jsx
+    testEnvironment: node
+    transform:
+      '^.+\\.(t|j)s$': 'ts-jest'
+    verbose: true

@@ -1,0 +1,14 @@
+// tsconfig.photo-processor.json
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist"
+  },
+  "include": [
+    "src/photo-processor.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "test"
+  ]
+}

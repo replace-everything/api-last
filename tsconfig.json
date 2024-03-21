@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "declaration": true,
+    "noImplicitAny": false,
+    "removeComments": true,
+    "allowSyntheticDefaultImports": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "target": "es6",
+    "sourceMap": true,
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "skipLibCheck": true,
+    "strict": false,
+    "strictNullChecks": false,
+    "typeRoots": [
+      "./node_modules/@types",
+      "./types" // Add this line to include your custom types directory
+    ],
+    "types": [
+      "node",
+      "jest"
+    ]
+  },
+  "include": [
+    "src/**/*",
+    "types/**/*.d.ts",
+    "webpack.config.js"
+  ], // Include only .ts files in the src directory
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+}

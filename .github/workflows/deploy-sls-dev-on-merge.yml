@@ -1,0 +1,52 @@
+name: Deploy to Serverless and Notify Slack
+
+on:
+  push:
+    branches:
+      - master # or your default branch name
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    environment:
+      name: dev
+      url: ${{ steps.deploy.outputs.serverless-output }} # Optional, if you want to use environment URL
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18' # Specify the Node.js version
+
+      - name: Install Dependencies
+        run: yarn install
+
+      - name: Install Dependencies
+        run: yarn install
+
+      - name: Build and Deploy
+        id: deploy
+        run: |
+          yarn webpack --config webpack.config.js --mode production 
+          OUTPUT=$(npx serverless deploy --stage prod)
+          echo "$OUTPUT"
+          echo "::set-output name=serverless-output::$OUTPUT"
+        env:
+          MINIMIZE: 'true'
+          NODE_ENV: 'dev'
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
+
+      - name: Notify Slack
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: ${{ steps.deploy.outputs.serverless-output }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

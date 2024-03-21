@@ -1,0 +1,23 @@
+{
+	"typescript.suggest.objectLiteralMethodSnippets.enabled": true,
+	"editor.tabSize": 2,
+	"editor.insertSpaces": true,
+	"editor.formatOnSave": true,
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[javascriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  // Add other languages here as needed
+  "files.autoSave": "onFocusChange",
+	"MutableAI.autocomplete.acceptLineByLine": true,
+	"MutableAI.experimentalFeatures": {
+		"autocompleteLog": true
+	},
+	"Codegeex.UseSimilarFileForPrompt": true,
+	"Codegeex.Privacy": true,
+	"Codegeex.EnableExtension": false,
+	"Codegeex.CompletionDelay": 0.9,
+	"CodeGPT.apiKey": "CodeGPT Plus Beta"
+}

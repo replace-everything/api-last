@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["src"], // Include only .ts files in the src directory
+  "exclude": ["node_modules", "dist", "**/*.d.ts"],
+  "compilerOptions": {
+    "module": "commonjs",
+    "outDir": "./dist",
+    "skipLibCheck": true,
+    "strict": false,
+    "strictNullChecks": false,
+  },
+}
