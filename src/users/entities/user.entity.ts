@@ -1,8 +1,16 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import { Expose } from 'class-transformer';
+import { Lead } from '../../leads/entities/lead.entity';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  OneToMany,
+  RelationId,
+} from 'typeorm';
 
 @Entity('PQ_user')
 export class User {
-  @PrimaryGeneratedColumn({ type: 'int', width: 6, comment: 'User ID' })
+  @PrimaryGeneratedColumn({ type: 'int', comment: 'User ID' })
   uid: number;
 
   @Column({ type: 'varchar', length: 60, nullable: true })
@@ -46,9 +54,6 @@ export class User {
 
   @Column({ type: 'datetime', nullable: true })
   ulastpassdts: Date;
-
-  @Column({ type: 'varchar', length: 50, nullable: true })
-  urole: string;
 
   @Column({ type: 'varchar', length: 3, nullable: true })
   uestimate: string;
@@ -157,4 +162,11 @@ export class User {
 
   @Column({ type: 'tinyint', nullable: true })
   umasteraccess: boolean;
+
+  @OneToMany(() => Lead, (lead: Lead) => lead.user)
+  leads?: Lead[];
+
+  @Expose()
+  @RelationId((user: User) => user.leads)
+  leadIds: number[];
 }

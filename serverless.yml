@@ -1,25 +1,40 @@
-# ./serverless.yml
-
 org: raesapi
 app: api
 service: mobile
 frameworkVersion: '3'
+useDotenv: true
 
 plugins:
   - serverless-offline
   - serverless-plugin-warmup
   - serverless-jest-plugin
-  - serverless-plugin-optimize
   # - serverless-plugin-typescript
 
 provider:
   name: aws
-  runtime: nodejs16.x
+  runtime: nodejs20.x
   stage: ${opt:stage, "local"} # Default to "local" if not specified
   environment:
-    BUCKET_NAME: raes-photos-dev
-    DB_CREDENTIALS_ARN: 'arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-${self:provider.stage}-'
-    NODE_ENV: ${self:provider.stage}
+    CORS_ORIGIN: ${env:CORS_ORIGIN}
+    BUCKET_NAME: ${env:BUCKET_NAME}
+    DB_CREDENTIALS_ARN: ${env:DB_CREDENTIALS_ARN}
+    NODE_ENV: ${env:NODE_ENV}
+    SECRET_KEY: ${env:SECRET_KEY}
+    DYNAMODB_SESSION_TABLE_NAME: ${env:DYNAMODB_SESSION_TABLE_NAME}
+    DYNAMODB_USERID_TABLE_NAME: ${env:DYNAMODB_USERID_TABLE_NAME}
+    username: ${env:username}
+    password: ${env:password}
+    host: ${env:host}
+    database: ${env:database}
+    port: ${env:port}
+    engine: ${env:engine}
+    PKCE_CLIENT_ID: ${env:PKCE_CLIENT_ID}
+    PKCE_CLIENT_SECRET: ${env:PKCE_CLIENT_SECRET}
+    PKCE_AUTHORIZATION_URL: ${env:PKCE_AUTHORIZATION_URL}
+    PKCE_TOKEN_URL: ${env:PKCE_TOKEN_URL}
+    PKCE_CALLBACK_URL: ${env:PKCE_CALLBACK_URL}
+    PKCE_SCOPE: ${env:PKCE_SCOPE}
+    dbInstanceIdentifier: ${env:dbInstanceIdentifier}
   apiGateway:
     binaryMediaTypes:
       - '*/*'
@@ -40,6 +55,7 @@ provider:
         - 'rds:*'
         - 'secretsmanager:*'
         - 's3:*'
+        - 'dynamodb:*'
       Resource: '*'
 
 package:
@@ -50,11 +66,16 @@ package:
     - 'node_modules/**'
   include:
     - 'dist/**'
+    - 'dist/swagger-ui'
+    - 'dist/swagger-ui/**'
 
 functions:
   api:
     handler: dist/bundle.handler
     # handler: src/main.handler
+    warmup:
+      default:
+        enabled: true
     timeout: 28
     events:
       - http:
@@ -63,20 +84,107 @@ functions:
           cors: false
   photoUpload:
     handler: dist/photoUploader.handler
+    warmup:
+      default:
+        enabled: true
     events:
       - http:
           path: /upload-photo
           method: post
-          cors: true
+          cors: false
+
+    # resources:
+    #   Resources:
+    #     UserSessionsTable:
+    #       Type: 'AWS::DynamoDB::Table'
+    #       Properties:
+    #         TableName: ${self:provider.environment.DYNAMODB_SESSION_TABLE_NAME}
+    #         AttributeDefinitions:
+    #           - AttributeName: userId
+    #             AttributeType: S
+    #         KeySchema:
+    #           - AttributeName: userId
+    #             KeyType: HASH
+    #         BillingMode: PAY_PER_REQUEST
+
+    WarmupRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: WarmupRole
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+              Action: sts:AssumeRole
+        Policies:
+          - PolicyName: WarmUpLambdaPolicy
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                # Warmer lambda to send logs to CloudWatch
+                - Effect: Allow
+                  Action:
+                    - logs:CreateLogGroup
+                    - logs:CreateLogStream
+                  Resource:
+                    - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/warmer:*
+                - Effect: Allow
+                  Action:
+                    - logs:PutLogEvents
+                  Resource:
+                    - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/warmer:*:*
+                # Warmer lambda to invoke the functions to be warmed
+                - Effect: 'Allow'
+                  Action:
+                    - lambda:InvokeFunction
+                  Resource:
+                    - !Sub arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:api
+                    - !Sub arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:photoUpload
+                    # and one more row for each function that must be warmed up by the warmer
+                # Warmer lambda to manage ENIS (only needed if deploying to VPC, https://docs.aws.amazon.com/lambda/latest/dg/vpc.html)
+                - Effect: Allow
+                  Action:
+                    - ec2:CreateNetworkInterface
+                    - ec2:DescribeNetworkInterfaces
+                    - ec2:DetachNetworkInterface
+                    - ec2:DeleteNetworkInterface
+                  Resource: '*'
 
 custom:
+  serverless-offline:
+    allowCache: true
+  dotenv:
+    path: .env.${self:provider.stage}
+    required:
+      env:
+        - BUCKET_NAME
+        - DB_CREDENTIALS_ARN
+        - NODE_ENV
+        - SECRET_KEY
+        - DYNAMODB_SESSION_TABLE_NAME
+        - DYNAMODB_USERID_TABLE_NAME
+        - username
+        - password
+        - host
+        - database
+        - port
+        - schema
+        - PKCE_CLIENT_ID
+        - PKCE_CLIENT_SECRET
+        - PKCE_AUTHORIZATION_URL
+        - PKCE_TOKEN_URL
+        - PKCE_CALLBACK_URL
+        - PKCE_SCOPE
   warmup:
-    enabled: true
-    prewarm: true
-    concurrency: 2
-    events:
-      - schedule: rate(5 minutes)
-    stages: ['production', 'staging']
+    default:
+      enabled: true
+      prewarm: true
+      events:
+        - schedule: cron(0/15 8-17 ? * MON-FRI *)
+      concurrency: 2
   jest:
     collectCoverage: true
     collectCoverageFrom: ['src/**/*.spec.ts']

@@ -1,0 +1,51 @@
+Reactive Programming with RxJS: An Overview for Nest.js
+
+
+Ravi Lamkoti
+·
+Follow
+3 min read
+·
+Jul 11, 2023
+
+68
+
+3
+
+
+
+
+
+RxJS with Nest JS
+RxJS is a library made to ease out working with asynchronous and event-based programs. According to RxJS documentation you could think RxJS as Lodash for events. RxJS combines the Observer pattern with Iterator pattern to fill the need for an ideal way of managing sequences of events.
+Let’s go over the essential concepts of RxJS
+Observable
+Think of observables as streams of events or data that you can listen to. In Nest.js you might have seen it in form of
+
+Observable in Nest JS Example
+Observer
+An Observer is a consumer of values delivered by an Observable. It is simply a set of callbacks. An Observable can emit states like next, error, and complete and Observer simply listen to these states.
+This is a typical Observer object:
+
+Observer in RxJS
+To use Observer, provide it to the subscribe of an Observable:
+
+Observable subscribed by Observer
+Subscription
+Subscription is simply a contract returned when you subscribe to an observable that you can cancel later.
+
+Subscription Example
+Operator
+Now this is something you should be most interested in. RxJS is mostly useful for its operator, even though the Observable is the foundation. Operators are simply functions that makes your complex asynchronous code to be easily composed in declarative manner.
+There are two kinds of operators in RxJS
+		Pipeable Operators are the kind that can be piped using the syntax of observable.pipe(operator). When pipeable operators are called they do not change the existing Observable instance. Instead, they return a new Observable whose logic is based on it’s previous Observable.
+		Creation Operators are standalone operators that can be used to create a new Observable.
+
+There are different categories of operators and you could find more about them here. Here are few of the operators you may encounter in NestJS code
+		catchError: This catches errors on the observable to be handled by returning a new observable or throwing an error.
+		tap: Within the tap operator, you can define functions that will be executed for each value emitted by the observable
+Subject
+Subject is a special type of Observable that allows values to be multicasted to many Observers similar to Event Emitter model.
+
+Subject Example
+And that’s all you need to know about RxJS to contribute to NestJS with an ease.

@@ -4,15 +4,16 @@ import {
   Post,
   Body,
   Param,
+  Req,
   Put,
   Delete,
-  Query,
-  ParseIntPipe,
+  OnModuleInit,
   HttpException,
   HttpStatus,
+  Query,
+  ParseIntPipe,
 } from '@nestjs/common';
-import { PQEventsService } from './events.service';
-import { Event } from './entities/event.entity';
+import { ModuleRef } from '@nestjs/core';
 import {
   ApiTags,
   ApiOperation,
@@ -20,18 +21,29 @@ import {
   ApiParam,
   ApiQuery,
 } from '@nestjs/swagger';
+import { PQEventsService } from './events.service';
+import { Event } from './entities/event.entity';
 
-@ApiTags('events')
-@Controller('events')
-export class PQEventController {
-  constructor(private readonly pqEventsService: PQEventsService) {}
+@ApiTags('')
+@Controller('')
+export class PQEventController implements OnModuleInit {
+  private pqEventsService: PQEventsService;
+
+  constructor(private moduleRef: ModuleRef) {}
+
+  onModuleInit() {
+    this.pqEventsService = this.moduleRef.get(PQEventsService, {
+      strict: false,
+    });
+  }
 
   @Post()
   @ApiOperation({ summary: 'Create a new PQ event' })
   @ApiResponse({ status: 201, description: 'Event created', type: Event })
-  async create(@Body() createPQEventDto: Event) {
+  async create(@Req() req: Request, @Body() createPQEventDto: Event) {
     try {
-      return await this.pqEventsService.create(createPQEventDto);
+      const schema = req.user?.schema;
+      return await this.pqEventsService.create(schema, createPQEventDto);
     } catch (error) {
       console.error(error);
       throw new HttpException(
@@ -44,9 +56,10 @@ export class PQEventController {
   @Get()
   @ApiOperation({ summary: 'Retrieve all PQ events' })
   @ApiResponse({ status: 200, description: 'Array of events', type: [Event] })
-  async findAll() {
+  async findAll(@Req() req: Request) {
     try {
-      return await this.pqEventsService.findAll();
+      const schema = req.user?.schema;
+      return await this.pqEventsService.findAll(schema);
     } catch (error) {
       console.error(error);
       throw new HttpException(
@@ -61,9 +74,10 @@ export class PQEventController {
   @ApiParam({ name: 'id', type: 'number' })
   @ApiResponse({ status: 200, description: 'Event object', type: Event })
   @ApiResponse({ status: 404, description: 'Event not found' })
-  async findOne(@Param('id') id: string) {
+  async findOne(@Req() req: Request, @Param('id') id: string) {
     try {
-      return await this.pqEventsService.findOne(+id);
+      const schema = req.user?.schema;
+      return await this.pqEventsService.findOne(schema, +id);
     } catch (error) {
       console.error(error);
       throw new HttpException(
@@ -79,11 +93,13 @@ export class PQEventController {
   @ApiResponse({ status: 200, description: 'Event updated', type: Event })
   @ApiResponse({ status: 404, description: 'Event not found' })
   async update(
+    @Req() req: Request,
     @Param('id') id: string,
     @Body() updatePQEventDto: Partial<Event>,
   ) {
     try {
-      return await this.pqEventsService.update(+id, updatePQEventDto);
+      const schema = req.user?.schema;
+      return await this.pqEventsService.update(schema, +id, updatePQEventDto);
     } catch (error) {
       console.error(error);
       throw new HttpException(
@@ -98,9 +114,10 @@ export class PQEventController {
   @ApiParam({ name: 'id', type: 'number' })
   @ApiResponse({ status: 204, description: 'Event deleted' })
   @ApiResponse({ status: 404, description: 'Event not found' })
-  async remove(@Param('id') id: string) {
+  async remove(@Req() req: Request, @Param('id') id: string) {
     try {
-      return await this.pqEventsService.remove(+id);
+      const schema = req.user?.schema;
+      return await this.pqEventsService.remove(schema, +id);
     } catch (error) {
       console.error(error);
       throw new HttpException(
@@ -116,12 +133,18 @@ export class PQEventController {
   @ApiQuery({ name: 'date', type: 'string' })
   @ApiResponse({ status: 200, description: 'Array of events', type: [Event] })
   async getEventsByUserAndDate(
+    @Req() req: Request,
     @Query('userId', ParseIntPipe) userId: number,
     @Query('date') dateString: string,
   ): Promise<Event[]> {
     try {
+      const schema = req.user?.schema;
       const date = new Date(dateString);
-      return await this.pqEventsService.findEventsByUserAndDate(userId, date);
+      return await this.pqEventsService.findEventsByUserAndDate(
+        schema,
+        userId,
+        date,
+      );
     } catch (error) {
       console.error(error);
       throw new HttpException(

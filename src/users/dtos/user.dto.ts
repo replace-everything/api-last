@@ -4,11 +4,13 @@ import {
   IsEmail,
   IsNumber,
   IsDate,
-  IsInt,
-  IsArray,
 } from 'class-validator';
 
 export class UserDto {
+  @IsOptional()
+  @IsNumber()
+  uid?: number;
+
   @IsOptional()
   @IsString()
   ulogin?: string;
@@ -70,8 +72,8 @@ export class UserDto {
   ustatus?: string;
 
   @IsOptional()
-  @IsDate()
-  uexpire?: Date;
+  @IsNumber()
+  uexpire?: number;
 
   @IsOptional()
   @IsString()
@@ -124,9 +126,4 @@ export class UserDto {
   @IsOptional()
   @IsNumber()
   usalesgoaly?: number;
-
-  @IsOptional()
-  @IsArray()
-  @IsInt({ each: true })
-  leadIds?: number[];
 }

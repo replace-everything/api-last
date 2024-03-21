@@ -1,7 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { CreateTaskDto } from './dtos/create-task.dto';
 import { Task } from './entities/task.entity';
 
 @Injectable()
@@ -10,47 +9,123 @@ export class TasksService {
     @InjectRepository(Task) private tasksRepository: Repository<Task>,
   ) {}
 
-  async create(createTaskDto: CreateTaskDto): Promise<Task> {
-    const task = this.tasksRepository.create(createTaskDto); // This creates a new task instance and copies all dto properties to it.
-    return this.tasksRepository.save(task); // This saves the new task to the database.
+  private filterFormat = (value: string | number) => {
+    if (typeof value === 'string' && value.length > 0) {
+      const isoDatePattern =
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?$/;
+      if (isoDatePattern.test(value)) {
+        return `'${value}'`;
+      } else {
+        return `'${value.replace(/'/g, "''")}'`;
+      }
+    }
+    if (typeof value === 'number') {
+      return value;
+    }
+    return 'NULL';
+  };
+
+  async create(schema: string, createTaskDto: Partial<Task>): Promise<Task> {
+    const columns = Object.keys(createTaskDto)
+      .map((column) => `\`${column}\``)
+      .join(',');
+    const values = Object.values(createTaskDto)
+      .map(this.filterFormat)
+      .join(',');
+    try {
+      const query = `INSERT INTO ${schema}.PQ_tasks(${columns}) VALUES(${values}) RETURNING *;`;
+      const [task] = await this.tasksRepository.manager.query(query);
+      return task;
+    } catch (error) {
+      console.error('Error: ', error);
+      throw new NotFoundException('Failed to create task');
+    }
   }
 
-  async findAll(): Promise<Task[]> {
-    return this.tasksRepository.find();
+  async findAll(schema: string): Promise<Task[]> {
+    try {
+      const tasks = await this.tasksRepository.manager.query(
+        `SELECT * FROM ${schema}.PQ_tasks;`,
+      );
+      return tasks;
+    } catch (error) {
+      console.error('Error: ', error);
+      throw new NotFoundException('Failed to retrieve all tasks');
+    }
   }
 
-  async findOne(tid: number): Promise<Task> {
-    return this.tasksRepository.findOne({
-      where: { tid },
-    });
+  async findOne(schema: string, tid: number): Promise<Task> {
+    let tasks: Task[];
+    try {
+      tasks = await this.tasksRepository.manager.query(
+        `SELECT * FROM ${schema}.PQ_tasks WHERE tid = '${tid}';`,
+      );
+    } catch (error) {
+      console.error('Error: ', error);
+      throw new NotFoundException('Failed to retrieve tasks by ID');
+    }
+    if (tasks.length === 0)
+      throw new NotFoundException(`Task with ID ${tid} not found`);
+    return tasks[0];
   }
 
-  async findByTjid(tjid: number): Promise<Task[]> {
-    return this.tasksRepository.find({ where: { tjid } });
+  async findByTjid(schema: string, tjid: number): Promise<Task[]> {
+    try {
+      return await this.tasksRepository.manager.query(
+        `SELECT * FROM ${schema}.PQ_tasks WHERE tjid = '${tjid}';`,
+      );
+    } catch (error) {
+      console.error('Error: ', error);
+      throw new NotFoundException('Failed to retrieve tasks by job ID');
+    }
   }
 
-  async findByTwoid(twoid: number): Promise<Task[]> {
-    return this.tasksRepository.find({ where: { twoid } });
+  async findByTwoid(schema: string, twoid: number): Promise<Task[]> {
+    try {
+      return await this.tasksRepository.manager.query(
+        `SELECT * FROM ${schema}.PQ_tasks WHERE twoid = '${twoid}';`,
+      );
+    } catch (error) {
+      console.error('Error: ', error);
+      throw new NotFoundException('Failed to retrieve tasks by work order ID');
+    }
   }
 
-  async findByTuid(tuid: number): Promise<Task[]> {
-    return this.tasksRepository.find({ where: { tuid } });
+  async findByTuid(schema: string, tuid: number): Promise<Task[]> {
+    try {
+      return await this.tasksRepository.manager.query(
+        `SELECT * FROM ${schema}.PQ_tasks WHERE tuid = '${tuid}';`,
+      );
+    } catch (error) {
+      console.error('Error: ', error);
+      throw new NotFoundException('Failed to retrieve tasks for user');
+    }
   }
 
-  async findByTassuid(tassuid: number): Promise<Task[]> {
-    return this.tasksRepository.find({ where: { tassuid } });
+  async findByTassuid(schema: string, tassuid: number): Promise<Task[]> {
+    try {
+      return await this.tasksRepository.manager.query(
+        `SELECT * FROM ${schema}.PQ_tasks WHERE tassuid = '${tassuid}';`,
+      );
+    } catch (error) {
+      console.error('Error: ', error);
+      throw new NotFoundException('Failed to retrieve tasks for user');
+    }
   }
 
-  async findAllForUserToday(userId: number): Promise<Task[]> {
-    const today = new Date().toISOString().substring(0, 10); // Convert today's date to 'YYYY-MM-DD'
+  async findAllForUserToday(schema: string, userId: number): Promise<Task[]> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const tasks = await this.tasksRepository.find({
-      where: {
-        tuid: userId,
-        tdts: today,
-      },
-    });
-
-    return tasks;
+    try {
+      return await this.tasksRepository.manager.query(
+        `SELECT * FROM "${schema}"."PQ_tasks" WHERE tuid = ${userId} AND tdts >= ${today} AND tdts < ${tomorrow}`,
+      );
+    } catch (error) {
+      console.error('Error: ', error);
+      throw new NotFoundException('Failed to retrieve tasks for user today');
+    }
   }
 }

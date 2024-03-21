@@ -19,5 +19,10 @@
 	"Codegeex.Privacy": true,
 	"Codegeex.EnableExtension": false,
 	"Codegeex.CompletionDelay": 0.9,
-	"CodeGPT.apiKey": "CodeGPT Plus Beta"
+	"CodeGPT.apiKey": "CodeGPT Plus Beta",
+	"Codegeex.Chat.LanguagePreference": "English",
+	"Codegeex.Comment.LanguagePreference": "English",
+	"Codegeex.SidebarUI.LanguagePreference": "English",
+	"Codegeex.CompletionModel": "CodeGeeX Pro[Beta]",
+	"Codegeex.CommitMessageStyle": "Default"
 }

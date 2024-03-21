@@ -1,52 +1,101 @@
-// pq-events.service.ts
-import { Injectable } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Event } from './entities/event.entity';
 
 @Injectable()
 export class PQEventsService {
   constructor(
     @InjectRepository(Event)
-    private pqEventsRepository: Repository<Event>,
+    private readonly pqEventsRepository: Repository<Event>,
   ) {}
 
-  create(createPQEventDto: Event) {
-    const pqEvent = this.pqEventsRepository.create(createPQEventDto);
-    return this.pqEventsRepository.save(pqEvent);
+  async create(schema: string, createPQEventDto: Event): Promise<Event> {
+    try {
+      const pqEvent = this.pqEventsRepository.create(createPQEventDto);
+      return await this.pqEventsRepository.manager.save(
+        `${schema}.PQ_events`,
+        pqEvent,
+      );
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to create event');
+    }
   }
 
-  findAll() {
-    return this.pqEventsRepository.find();
+  async findAll(schema: string): Promise<Event[]> {
+    try {
+      return await this.pqEventsRepository.manager.query(
+        `SELECT * FROM ${schema}.PQ_events;`,
+      );
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to fetch events');
+    }
   }
 
-  findOne(id: number) {
-    return this.pqEventsRepository.findOne({
-      where: { eid: id },
-    });
+  async findOne(schema: string, id: number): Promise<Event> {
+    try {
+      const [event] = await this.pqEventsRepository.manager.query(
+        `SELECT * FROM ${schema}.PQ_events WHERE eid = '${id}';`,
+      );
+      return event;
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to fetch event');
+    }
   }
 
-  async update(id: number, updatePQEventDto: Partial<Event>) {
-    await this.pqEventsRepository.update(id, updatePQEventDto);
-    return this.pqEventsRepository.findOne({
-      where: { eid: id },
-    });
+  private escapeSQLString(value) {
+    if (typeof value === 'string') {
+      // Simple escape for single quotes - this is a naive approach, be very cautious!
+      return `'${value.replace(/'/g, "''")}'`;
+    }
+    return value;
   }
 
-  async remove(id: number) {
-    await this.pqEventsRepository.delete(id);
-    return { deleted: true };
+  async update(
+    schema: string,
+    id: number,
+    updatePQEventDto: Partial<Event>,
+  ): Promise<Event> {
+    try {
+      const setClause = Object.entries(updatePQEventDto)
+        .map(([key, value]) => `"${key}" = ${this.escapeSQLString(value)}`)
+        .join(', ');
+      await this.pqEventsRepository.manager.query(
+        `UPDATE ${schema}.PQ_events SET ${setClause} WHERE eid = '${id}' returning *;`,
+      );
+      return this.findOne(schema, id);
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to update event');
+    }
   }
 
-  async findEventsByUserAndDate(userId: number, date: Date): Promise<Event[]> {
-    const startDate = new Date(date.setHours(0, 0, 0, 0));
-    const endDate = new Date(date.setHours(23, 59, 59, 999));
+  async remove(schema: string, id: number): Promise<{ deleted: true }> {
+    try {
+      await this.pqEventsRepository.manager.query(
+        `DELETE FROM ${schema}.PQ_events WHERE eid = '${id}';`,
+      );
+      return { deleted: true };
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to delete event');
+    }
+  }
 
-    return this.pqEventsRepository.find({
-      where: {
-        euid: userId,
-        estartdts: Between(startDate, endDate),
-      },
-    });
+  async findEventsByUserAndDate(
+    schema: string,
+    userId: number,
+    date: Date,
+  ): Promise<Event[]> {
+    try {
+      const startDate = new Date(date.setHours(0, 0, 0, 0));
+      const endDate = new Date(date.setHours(23, 59, 59, 999));
+      return await this.pqEventsRepository.manager.query(
+        `SELECT * FROM ${schema}.PQ_events WHERE euid = ${userId} AND estartdts BETWEEN ${startDate} AND ${endDate};`,
+        [userId, startDate, endDate],
+      );
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Failed to find events by user and date',
+      );
+    }
   }
 }

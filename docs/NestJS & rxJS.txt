@@ -1,0 +1,53 @@
+Enhancing Developer Productivity with NestJS and RxJS in a Fintech Environment
+
+
+
+
+PrimaryBid Tech Blog
+·
+Follow
+Published in
+PrimaryBid Technology Blog
+·
+5 min read
+·
+Sep 26, 2023
+
+32
+
+2
+
+
+
+In
+the fintech industry, where agility and efficiency are paramount, developer productivity is crucial in delivering innovative and reliable financial solutions. As you can imagine, for a Series C scale-up, like PrimaryBid, it is vital to ensure the continuous improvement of the platform and the quick delivery of new features.
+In this article, I will explore how the combination of NestJS and RxJS can help accelerate development. I will delve into the key features of NestJS and RxJS which help PrimaryBid facilitate faster development, seamless collaboration, and better code maintainability. Let’s roll!
+So, why NestJS and RxJS?
+So glad you asked! Well, if you’ve never heard about either of those things — let me give you a quick introduction.
+NestJS is a popular backend framework for Node.js for building efficient, scalable, and maintainable server-side applications using TypeScript or JavaScript. It is intended to provide a solid foundation for your application by leveraging well-known patterns and the best practices from other frameworks such as Angular, Express.js, and so on.
+RxJS is a JavaScript library for reactive programming that offers a pretty darn powerful set of tools for handling asynchronous data streams. It makes managing real-time data and event-driven scenarios at PrimaryBid an absolute breeze!
+Now that we’ve all got acquainted, let’s delve deeper into how these tools are utilised to fuel developer productivity at PrimaryBid!
+Benefits of NestJS
+First and foremost, we must talk about the NestJS Command Line Interface (CLI). The CLI offers commands to generate controllers, modules, services, and more, enabling our development teams to create boilerplate code quickly and efficiently. Every developer knows that there is nothing worse than creating the same structure over and over again when a new service is required, am I right?!
+Well, NestJS CLI solves this problem beautifully and saves teams’ time by automatically generating common project components, reducing the need for repetitive and error-prone manual coding. The generated code adheres to the framework’s best practices, ensuring a consistent codebase throughout the PrimaryBid platform.
+
+
+Furthermore, NestJS follows modular architecture. The encouragement to use modules, each encapsulating a specific functionality or feature, helps teams keep the codebase organised and enables developers to work on different parts of the application in isolation.
+Modularity and NestJS CLI offer significant benefits to the teams at PrimaryBid by enabling engineers to concentrate on efficiently writing essential business logic. On the topic of modularity, I must mention the framework’s powerful dependency injection (DI) system. It’s a technique where the dependencies of a class or components are provided from outside instead of being created within the class itself.
+NestJS uses DI to facilitate the separation of concerns, enhance code reusability, and make testing more straightforward. And who does not like a smooth testing process?
+
+Benefits of RxJS
+The core concept in RxJS is observables, which represent sequences of data or events over time. With RxJS, developers can easily compose and transform data streams using various operators, making it easy to streamline asynchronous operations. It’s based on the principles of Reactive Programming, which focuses on processing and reacting to streams of data or events. RxJS is commonly used in both frontend and backend development to handle complex asynchronous scenarios.
+One of the major benefits of RxJS is that it simplifies the management of async operations by representing them as streams of data. As you can imagine, that is vital for PrimaryBid, especially during a deal when retail investors log onto our platform and want to subscribe for shares. RxJS provides a wide range of operators that allow you to transform, filter, combine, and manipulate observables.
+Operators are functions that take one observable as input and return a new observable that has been transformed in some way. If you’ve worked with promises before, you will be familiar with how easy it is to get into callback hell — well, this helps to avoid it and makes it easier to reason about complex asynchronous scenarios, and as a bonus — keeps our code readable and easier to maintain!
+Here are some of the most common operators, however, it does not end here! You also have the ability of creating your own custom operators for any use cases you may have which boosts your productivity even further, e.g. queue item processing management.
+
+Another useful functionality of RxJS is smooth error handling. At PrimaryBid we operate in a regulated environment, therefore, error handling is essential in ensuring our application is robust and reliable. Errors can occur at various stages of an observable’s lifecycle, such as during data transformation, network requests, or other asynchronous operations.
+RxJS provides engineers at PrimaryBid with mechanisms to handle errors effectively. Additionally, leveraging observability tools like Splunk, we can gain valuable insights into the error patterns and performance issues within our application, enabling us to proactively identify and address issues.
+Let’s take a look at a couple of operators:
+		‘catchError(errorHandler)’. This operator catches errors and replaces them with a fallback observable or value. It’s often used to gracefully handle errors without breaking the entire stream.
+		‘retry(count)’. This operator attempts to re-subscribe to the source observable a specified number of times after an error occurs. It comes in handy for transient errors like network timeouts.
+Here is a quick example of error handling and retrying. Spot how easy it is to implement retry functionality compared to if you only used promises!
+
+Conclusion
+Hopefully now the impact of NestJS and RxJS on developer productivity at PrimaryBid shines through. These tools continue to empower our engineering teams to construct resilient and dependable services, continuously improving retail investor experience. The combination of NestJS and RxJS truly expedites the rollout of new features, all the while ensuring our codebase remains approachable and easily maintainable — an absolute delight to work with!

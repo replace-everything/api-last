@@ -5,32 +5,49 @@ import {
   Get,
   HttpException,
   HttpStatus,
+  OnModuleInit,
   Param,
   Patch,
   Post,
+  Req,
 } from '@nestjs/common';
-import {
-  CreatePQInspectionDto,
-  UpdatePQInspectionDto,
-} from './dtos/inspection.dto';
+import { Request } from 'express';
+import { CreatePQInspectionDto } from './dtos/inspection.dto';
 import { PQInspectionsService } from './inspections.service';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import { Inspection } from './entities/inspection.entity';
+import { ModuleRef } from '@nestjs/core';
 
-@ApiTags('inspections')
-@Controller('inspections')
-export class PQInspectionsController {
-  constructor(private readonly pQInspectionsService: PQInspectionsService) {}
+@ApiTags('')
+@Controller('')
+export class PQInspectionsController implements OnModuleInit {
+  private pQInspectionsService: PQInspectionsService;
 
-  @Post()
+  constructor(private moduleRef: ModuleRef) {}
+
+  onModuleInit() {
+    this.pQInspectionsService = this.moduleRef.get(PQInspectionsService, {
+      strict: false,
+    });
+  }
+
+  @Post('/create')
   @ApiOperation({ summary: 'Create a new PQ inspection' })
   @ApiResponse({
     status: 201,
     description: 'The inspection has been successfully created.',
     type: CreatePQInspectionDto,
   })
-  async create(@Body() createPQInspectionDto: CreatePQInspectionDto) {
+  async create(
+    @Req() req: Request,
+    @Body() createPQInspectionDto: Partial<Inspection>,
+  ) {
     try {
-      return await this.pQInspectionsService.create(createPQInspectionDto);
+      const schema = req.user?.schema;
+      return await this.pQInspectionsService.create(
+        schema,
+        createPQInspectionDto,
+      );
     } catch (error) {
       console.error(error);
       throw new HttpException(
@@ -45,11 +62,12 @@ export class PQInspectionsController {
   @ApiResponse({
     status: 200,
     description: 'An array of PQ inspection objects',
-    type: [CreatePQInspectionDto],
+    type: [Inspection],
   })
-  async findAll() {
+  async findAll(@Req() req: Request) {
     try {
-      return await this.pQInspectionsService.findAll();
+      const schema = req.user?.schema;
+      return await this.pQInspectionsService.findAll(schema);
     } catch (error) {
       console.error(error);
       throw new HttpException(
@@ -69,15 +87,16 @@ export class PQInspectionsController {
   @ApiResponse({
     status: 200,
     description: 'The PQ inspection object',
-    type: CreatePQInspectionDto,
+    type: Inspection,
   })
   @ApiResponse({
     status: 404,
     description: 'Inspection with the specified ID not found',
   })
-  async findOne(@Param('id') id: number) {
+  async findOne(@Req() req: Request, @Param('id') id: number) {
     try {
-      return await this.pQInspectionsService.findOne(id);
+      const schema = req.user?.schema;
+      return await this.pQInspectionsService.findOne(schema, id);
     } catch (error) {
       console.error(error);
       throw new HttpException(
@@ -97,18 +116,23 @@ export class PQInspectionsController {
   @ApiResponse({
     status: 200,
     description: 'The updated PQ inspection object',
-    type: CreatePQInspectionDto,
   })
   @ApiResponse({
     status: 404,
     description: 'Inspection with the specified ID not found',
   })
   async update(
+    @Req() req: Request,
     @Param('id') id: number,
-    @Body() updatePQInspectionDto: UpdatePQInspectionDto,
+    @Body() updatePQInspectionDto: Partial<Inspection>,
   ) {
     try {
-      return await this.pQInspectionsService.update(+id, updatePQInspectionDto);
+      const schema = req.user?.schema;
+      return await this.pQInspectionsService.update(
+        schema,
+        +id,
+        updatePQInspectionDto,
+      );
     } catch (error) {
       console.error(error);
       throw new HttpException(
@@ -130,9 +154,10 @@ export class PQInspectionsController {
     status: 404,
     description: 'Inspection with the specified ID not found',
   })
-  async remove(@Param('id') id: number) {
+  async remove(@Req() req: Request, @Param('id') id: number) {
     try {
-      return await this.pQInspectionsService.remove(id);
+      const schema = req.user?.schema;
+      return await this.pQInspectionsService.remove(schema, id);
     } catch (error) {
       console.error(error);
       throw new HttpException(

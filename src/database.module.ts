@@ -5,6 +5,7 @@ import { DatabaseConfigService } from './config/database-config.service';
 
 @Module({
   imports: [
+    DatabaseConfigModule,
     TypeOrmModule.forRootAsync({
       imports: [DatabaseConfigModule],
       inject: [DatabaseConfigService],
@@ -13,10 +14,18 @@ import { DatabaseConfigService } from './config/database-config.service';
         return {
           ...dbConfig,
           autoLoadEntities: true,
+          database: 'DBSUPERIORDEMO',
+          cache: {
+            duration: 30000,
+          },
+          keepAlive: {
+            interval: 30000,
+          },
         };
       },
     }),
   ],
+  providers: [DatabaseConfigService],
   exports: [TypeOrmModule],
 })
 export class DatabaseModule {}

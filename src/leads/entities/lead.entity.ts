@@ -1,110 +1,284 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
-
-enum LeadStatus {
-  NEW = 'NEW',
-  IN_PROGRESS = 'IN_PROGRESS',
-  COMPLETED = 'COMPLETED',
-  CANCELLED = 'CANCELLED',
-}
-
-enum LeadType {
-  COMMERCIAL = 'COMMERCIAL',
-  RESIDENTIAL = 'RESIDENTIAL',
-}
-
-enum BuildingType {
-  COMMERCIAL = 'COMMERCIAL',
-  RESIDENTIAL = 'RESIDENTIAL',
-}
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
+import {
+  IsInt,
+  IsString,
+  IsDate,
+  IsOptional,
+  MaxLength,
+  IsBoolean,
+  IsNumber,
+} from 'class-validator';
+import { User } from '../../users/entities/user.entity';
 
 @Entity('PQ_leads')
 export class Lead {
   @PrimaryGeneratedColumn()
+  @IsInt()
   lid: number;
 
-  @Column({ type: 'int', nullable: true })
-  luid: number;
+  @Column({ nullable: true })
+  @IsOptional()
+  @IsNumber()
+  luid?: number;
+
+  @ManyToOne(() => User, (user) => user.leads)
+  @JoinColumn({ name: 'luid' })
+  @IsOptional()
+  user: User;
 
   @Column({ type: 'int', nullable: true })
-  lcid: number;
+  @IsOptional()
+  @IsInt()
+  lcid?: number;
 
   @Column({ type: 'datetime', nullable: true })
-  ladate: Date;
+  @IsOptional()
+  @IsDate()
+  ladate?: Date;
 
   @Column({ type: 'varchar', length: 15, nullable: true })
-  lstatus: LeadStatus;
+  @IsOptional()
+  @IsString()
+  lstatus?: string;
 
   @Column({ type: 'varchar', length: 2, nullable: true })
-  lstatus2: string;
+  @IsOptional()
+  @IsString()
+  lstatus2?: string;
 
   @Column({ type: 'varchar', length: 15, nullable: true })
-  ltype: LeadType;
+  @IsOptional()
+  @IsString()
+  ltype?: string;
 
   @Column({ type: 'text', nullable: true })
-  lservice: string;
+  @IsOptional()
+  @MaxLength(65535)
+  lservice?: string;
 
   @Column({ type: 'int', nullable: true })
-  lstatusuid: number;
+  @IsOptional()
+  @IsInt()
+  lstatusuid?: number;
 
   @Column({ type: 'text', nullable: true })
-  lstatusreason: string;
+  @IsOptional()
+  @MaxLength(65535)
+  lstatusreason?: string;
 
   @Column({ type: 'date', nullable: true })
-  lstatusdate: Date;
+  @IsOptional()
+  @IsDate()
+  lstatusdate?: Date;
 
   @Column({ type: 'date', nullable: true })
-  llastcontact: Date;
+  @IsOptional()
+  @IsDate()
+  llastcontact?: Date;
 
   @Column({ type: 'int', nullable: true })
-  llastcontactuid: number;
+  @IsOptional()
+  @IsInt()
+  llastcontactuid?: number;
 
   @Column({ type: 'varchar', length: 25, nullable: true })
-  lsource: string;
+  @IsOptional()
+  @IsString()
+  lsource?: string;
 
   @Column({ type: 'varchar', length: 72, nullable: true })
-  lcomp: string;
+  @IsOptional()
+  @IsString()
+  lcomp?: string;
 
-  // Additional fields would follow the same pattern with @Column decorators...
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  @IsOptional()
+  @IsString()
+  lcontact?: string;
 
-  @Column({ type: 'varchar', length: 24, nullable: true })
-  lbtype: BuildingType;
-
-  @Column({ type: 'int', nullable: true })
-  lbfloors: number;
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  @IsOptional()
+  @IsString()
+  ltitle?: string;
 
   @Column({ type: 'varchar', length: 50, nullable: true })
-  lbroofmat: string;
+  @IsOptional()
+  @IsString()
+  llname?: string;
 
-  @Column({ type: 'varchar', length: 3, nullable: true })
-  lbhatch: string;
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  @IsOptional()
+  @IsString()
+  laddr1?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  @IsOptional()
+  @IsString()
+  laddr2?: string;
+
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  @IsOptional()
+  @IsString()
+  lcity?: string;
+
+  @Column({ type: 'varchar', length: 2, nullable: true })
+  @IsOptional()
+  @IsString()
+  lst?: string;
 
   @Column({ type: 'int', nullable: true })
-  lbheight: number;
+  @IsOptional()
+  @IsInt()
+  lzip?: number;
 
-  @Column({ type: 'date', nullable: true })
-  linspection: Date;
+  @Column({ type: 'varchar', length: 24, nullable: true })
+  @IsOptional()
+  @IsString()
+  llatlon?: string;
 
-  @Column({ type: 'date', nullable: true })
-  linspectioncomp: Date;
+  @Column({ type: 'varchar', length: 16, nullable: true })
+  @IsOptional()
+  @IsString()
+  lphone?: string;
+
+  @Column({ type: 'varchar', length: 6, nullable: true })
+  @IsOptional()
+  @IsString()
+  lext?: string;
+
+  @Column({ type: 'varchar', length: 16, nullable: true })
+  @IsOptional()
+  @IsString()
+  laltphone?: string;
+
+  @Column({ type: 'varchar', length: 6, nullable: true })
+  @IsOptional()
+  @IsString()
+  laltext?: string;
+
+  @Column({ type: 'varchar', length: 80, nullable: true })
+  @IsOptional()
+  @IsString()
+  lemail?: string;
+
+  @Column({ type: 'bigint', nullable: true })
+  @IsOptional()
+  @IsInt()
+  llotid?: bigint;
 
   @Column({ type: 'text', nullable: true })
-  linspectionnotes: string;
+  @IsOptional()
+  @MaxLength(65535)
+  lnotes?: string;
+
+  @Column({ type: 'varchar', length: 16, nullable: true })
+  @IsOptional()
+  @IsString()
+  lfax?: string;
+
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  @IsOptional()
+  @IsString()
+  lcontact2?: string;
+
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  @IsOptional()
+  @IsString()
+  ltitle2?: string;
+
+  @Column({ type: 'bigint', nullable: true })
+  @IsOptional()
+  @IsInt()
+  lphone2?: bigint;
+
+  @Column({ type: 'varchar', length: 6, nullable: true })
+  @IsOptional()
+  @IsString()
+  lext2?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  @IsOptional()
+  @IsString()
+  lemail2?: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  @IsOptional()
+  @IsString()
+  lemail2cc?: string;
+
+  @Column({ type: 'varchar', length: 24, nullable: true })
+  @IsOptional()
+  @IsString()
+  lbtype?: string;
+
+  @Column({ type: 'int', nullable: true })
+  @IsOptional()
+  @IsInt()
+  lbfloors?: number;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  @IsOptional()
+  @IsString()
+  lbroofmat?: string;
+
+  @Column({ type: 'varchar', length: 3, nullable: true })
+  @IsOptional()
+  @IsString()
+  lbhatch?: string;
+
+  @Column({ type: 'int', nullable: true })
+  @IsOptional()
+  @IsInt()
+  lbheight?: number;
+
+  @Column({ type: 'date', nullable: true })
+  @IsOptional()
+  @IsDate()
+  linspection?: Date;
+
+  @Column({ type: 'date', nullable: true })
+  @IsOptional()
+  @IsDate()
+  linspectioncomp?: Date;
 
   @Column({ type: 'text', nullable: true })
-  llocnotes: string;
+  @IsOptional()
+  @MaxLength(65535)
+  linspectionnotes?: string;
 
-  @Column({ type: 'tinyint', default: 0 })
-  lapp: boolean;
+  @Column({ type: 'text', nullable: true })
+  @IsOptional()
+  @MaxLength(65535)
+  llocnotes?: string;
+
+  @Column({ type: 'tinyint', nullable: true })
+  @IsOptional()
+  @IsBoolean()
+  lapp?: boolean;
 
   @Column({ type: 'varchar', length: 5, nullable: true })
-  linvpays: string;
+  @IsOptional()
+  @IsString()
+  linvpays?: string;
 
   @Column({ type: 'varchar', length: 70, nullable: true })
-  linsuranceco: string;
+  @IsOptional()
+  @IsString()
+  linsuranceco?: string;
 
   @Column({ type: 'varchar', length: 35, nullable: true })
-  lclaimnum: string;
+  @IsOptional()
+  @IsString()
+  lclaimnum?: string;
 
   @Column({ type: 'text', nullable: true })
-  lsimpleinspections: string;
+  @IsOptional()
+  @MaxLength(65535)
+  lsimpleinspections?: string;
 }

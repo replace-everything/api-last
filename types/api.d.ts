@@ -1603,7 +1603,6 @@ interface PQ_user {
   ulastlogin: Date;
   ulastdts: Date;
   ulastpassdts: Date;
-  urole: string;
   uestimate: string;
   uclients: string;
   ujobs: string;

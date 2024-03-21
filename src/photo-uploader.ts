@@ -5,7 +5,6 @@ import {
   GetSecretValueCommand,
 } from '@aws-sdk/client-secrets-manager';
 import { PoolConnection, createPool } from 'mysql2/promise';
-import { FileExtension, MimeType, fileTypeFromBuffer } from 'file-type';
 
 // Initialize AWS S3
 const s3 = new S3Client({ region: 'us-east-1' });
@@ -133,7 +132,7 @@ interface Metadata {
   [key: string]: string | number;
 }
 
-function filterAndValidateMetadata(metadata: Metadata): Metadata {
+function filterAndValidateMetadata(metadata: EventBody): Metadata {
   const allowedKeys = [
     'pjobid',
     'pwoid',
@@ -178,7 +177,8 @@ async function createDbPool() {
 
 // Parse multipart/form-data
 async function parseFormData(event: LambdaEvent): Promise<FormDataResult[]> {
-  const contentType = event.headers['Content-Type'] || '';
+  const contentType =
+    event.headers['Content-Type'] || event.headers['content-type'] || '';
   if (!event.body) throw new Error('Invalid form data: Missing body.');
   if (!contentType.startsWith('multipart/form-data'))
     throw new Error('Invalid content type: Expected multipart/form-data.');
@@ -186,32 +186,76 @@ async function parseFormData(event: LambdaEvent): Promise<FormDataResult[]> {
   const buffer = event.isBase64Encoded
     ? Buffer.from(event.body, 'base64')
     : Buffer.from(event.body, 'binary');
+  if (!buffer) throw new Error('Invalid form data: Missing buffer.');
   const boundary = contentType?.split('boundary=')[1];
   if (!boundary) throw new Error('Missing boundary in content type.');
 
-  const parts = buffer.toString()?.split(`--${boundary}`);
-  const promises = parts.map((part) => processFormPart(part));
-  const formData = await Promise.all(promises);
-  return formData[1];
+  const bufferString = buffer.toString();
+  const boundaryString = `\r\n--${boundary}\r\n`;
+  let parts = bufferString.split(boundaryString);
+
+  // Initialize formDataAccumulator to store fileName and mimeType
+  let formDataAccumulator = { fileName: undefined, mimeType: undefined };
+
+  // Update the map function to pass formDataAccumulator to processFormPart
+  const promises = parts.map((part) =>
+    processFormPart(part, formDataAccumulator),
+  );
+  const formData = (await Promise.all(promises)).flat();
+
+  return formData;
 }
 
-async function processFormPart(part: string): Promise<FormDataResult[]> {
-  if (part.trim() === '--') return [];
+async function processFormPart(
+  part: string,
+  formDataAccumulator: { fileName?: string; mimeType?: string },
+): Promise<FormDataResult[]> {
+  const trimmedPart = part.trim();
+  if (trimmedPart === '--') return [];
 
-  const [headerSection, dataSection] = part?.split('\r\n\r\n');
+  const [headerSection, dataSection] = trimmedPart.split('\r\n\r\n', 2);
   if (!headerSection || !dataSection) return [];
-  const headers = parsePartHeaders(headerSection);
 
-  if (headers['content-disposition']?.includes('filename=')) {
-    const formDataRes: FormDataResult = await processFilePart(
-      headers,
-      dataSection.trim(),
-    );
-    return [formDataRes];
-  } else {
-    const fieldName = extractFieldName(headers['content-disposition']);
-    return [{ key: fieldName, value: dataSection.trim() }];
+  const headers = parsePartHeaders(headerSection);
+  const contentDisposition = headers['content-disposition'];
+
+  // Extract filename from the part with 'body[name]'
+  if (contentDisposition && contentDisposition.includes('name="body[name]"')) {
+    formDataAccumulator.fileName = dataSection.trim();
   }
+
+  // Extract MIME type from the part with 'body[type]'
+  if (contentDisposition && contentDisposition.includes('name="body[type]"')) {
+    formDataAccumulator.mimeType = dataSection.trim();
+  }
+
+  // Check if this part is the file data part based on the 'name' attribute in the 'content-disposition' header
+  if (contentDisposition && contentDisposition.includes('name="body[data]"')) {
+    const base64Data = dataSection.trim();
+    const base64Content = base64Data.startsWith('data:')
+      ? base64Data.split(',')[1]
+      : base64Data;
+    const fileBuffer = Buffer.from(base64Content, 'base64');
+
+    // Use the accumulated filename and MIME type
+    const fileName = formDataAccumulator.fileName || 'default_filename';
+    const mimeType = formDataAccumulator.mimeType || 'application/octet-stream';
+    const extension = mimeType.split('/')[1] || 'bin'; // Simple extraction of extension from MIME type
+
+    return [
+      {
+        processedImage: fileBuffer,
+        fileName: fileName,
+        extension: extension,
+        mimetype: mimeType,
+        fieldname: 'file',
+      },
+    ];
+  }
+
+  // For other form parts, return key-value pairs
+  const fieldName = extractFieldName(contentDisposition, dataSection);
+  return [{ key: fieldName, value: dataSection.trim() }];
 }
 
 function parsePartHeaders(headerSection: string): { [key: string]: string } {
@@ -222,33 +266,17 @@ function parsePartHeaders(headerSection: string): { [key: string]: string } {
   }, {});
 }
 
-async function processFilePart(
-  headers: { [key: string]: string },
+function extractFieldName(
+  contentDisposition: string,
   dataSection: string,
-): Promise<FileResult> {
-  const contentDisposition = headers['content-disposition'];
-  const fileName = contentDisposition.match(/filename="(.*)"/)[1];
-  const fileBuffer = Buffer.from(dataSection, 'binary');
-  let fileTypeResult = await fileTypeFromBuffer(fileBuffer);
-  const fieldname = extractFieldName(contentDisposition);
-  if (!fileTypeResult) {
-    const mime = headers['content-type'] as MimeType;
-    const ext = contentDisposition.match(/\.([^.]+)(?=")/)[1] as FileExtension;
-    fileTypeResult = { mime, ext };
+): string {
+  let fileName: string;
+  if (contentDisposition.match(/name="(.*)"/)?.length) {
+    fileName = contentDisposition.match(/name="(.*)"/)[1];
+  } else if (dataSection.match(/name="(.*)"/)?.length) {
+    fileName = dataSection.match(/name="(.*)"/)[1];
   }
-  if (!fileTypeResult) throw new Error('Could not determine file type.');
-
-  return {
-    fieldname,
-    fileName,
-    extension: fileTypeResult.ext,
-    mimetype: fileTypeResult.mime,
-    processedImage: fileBuffer,
-  };
-}
-
-function extractFieldName(contentDisposition: string): string {
-  return contentDisposition.match(/name="(.*)"/)[1];
+  return fileName;
 }
 
 // Database operations
@@ -256,53 +284,64 @@ async function insertMetadata(
   {
     fileName,
     extension,
-    ...eventBody
-  }: { fileName: string; extension: string } & EventBody,
+    eventBody,
+  }: { fileName: string; extension: string; eventBody: EventBody },
   client: PoolConnection,
 ): Promise<number> {
-  let fields = ['photoname', 'photoext', ...Object.keys(eventBody)];
-  let placeholders = fields.map(() => '?').join(', ');
-
+  // Filter and validate metadata to include only allowed keys and values that are not undefined
   const metadata = filterAndValidateMetadata(eventBody);
-  // Convert undefined values to null to ensure they are handled correctly in SQL
-  let values = [
-    fileName,
-    extension,
-    ...Object.values(metadata).map((value) =>
-      value === undefined ? null : value,
-    ),
-  ];
+  if (metadata?.photoname && `${metadata.photoname}`.length > 6)
+    metadata.photoname = ('' + metadata.photoname).substring(0, 6);
 
-  // Handle null values for pjobid and pwoid within the photoorder calculation
-  const pjobid = eventBody.pjobid !== undefined ? eventBody.pjobid : null;
-  const pwoid = eventBody.pwoid !== undefined ? eventBody.pwoid : null;
+  let fields = ['photoname', 'photoext'];
+  let placeholders = ['?', '?'];
+  let values = [fileName, extension];
 
-  // Step 1: Calculate Photo Order
-  const photoOrderQuery = `
+  // Add additional data fields, placeholders, and values dynamically
+  for (const [key, value] of Object.entries(metadata)) {
+    if (value !== undefined) {
+      fields.push(key);
+      placeholders.push('?');
+      values.push(typeof value === 'number' ? `'${value}'` : value);
+    }
+  }
+
+  // Calculate photo order
+  let photoOrder = 1; // Default photo order
+  try {
+    const photoOrderQuery = `
       SELECT COALESCE(MAX(photoorder), 0) + 1 AS nextPhotoOrder 
       FROM PQ_photos 
-      WHERE pjobid IS NOT NULL AND pjobid = ? OR pwoid IS NOT NULL AND pwoid = ?
-  `;
-  const [orderResult] = await client.execute(photoOrderQuery, [pjobid, pwoid]);
-  const photoOrder =
-    typeof orderResult[0].nextPhotoOrder === 'number'
-      ? orderResult[0].nextPhotoOrder
-      : 1; // Extract calculated order
+      WHERE (pjobid IS NOT NULL AND pjobid = ?) OR (pwoid IS NOT NULL AND pwoid = ?)
+    `;
+    const [orderResult] = await client.execute(photoOrderQuery, [
+      metadata.pjobid || null,
+      metadata.pwoid || null,
+    ]);
+    photoOrder = orderResult[0]?.nextPhotoOrder || 1;
+  } catch (e) {
+    console.error('Error calculating photo order:', e);
+  }
 
-  fields = ['photoname', 'photoext', 'photoorder', ...Object.keys(eventBody)];
-  placeholders = fields.map(() => '?').join(', ');
-  values = [123456, extension, photoOrder, ...Object.values(metadata)];
+  // Add photo order to the SQL query
+  fields.push('photoorder');
+  placeholders.push('?');
+  values.push(`${photoOrder}`);
 
-  const insertQuery = `
-      INSERT INTO PQ_photos (${fields.join(', ')})
-      VALUES (${placeholders})
-  `;
-  const [ResultSetHeader] = (await client.execute(
-    insertQuery,
-    values,
-  )) as unknown as InsertResult[];
+  // Construct the final SQL query
+  const insertQuery = `INSERT INTO PQ_photos (${fields.map((key) => `\`${key}\``).join(', ')}) VALUES (${values.map((value) => `'${value}'`).join(', ')}) RETURNING *;`;
 
-  return ResultSetHeader.insertId;
+  try {
+    const [ResultSetHeader] = (await client.execute(
+      insertQuery,
+    )) as unknown as InsertResult[];
+    return ResultSetHeader.insertId;
+  } catch (e) {
+    console.error('Error inserting metadata into RDS:', e);
+    throw new DatabaseError(
+      `Error inserting metadata for file ${fileName}.${extension} into the database. ${e}`,
+    );
+  }
 }
 
 async function deleteMetadata(
@@ -313,50 +352,42 @@ async function deleteMetadata(
 }
 
 // S3 operations
-async function uploadToS3(
-  processedImage: Buffer,
-  fileName: string,
-  extension: string,
-): Promise<void> {
+async function uploadToS3(fileBuffer, fileName, mimeType) {
+  const s3Key = `${fileName}`;
+
   const putCommand = new PutObjectCommand({
     Bucket: bucketName,
-    Key: `${fileName}.${extension}`,
-    Body: processedImage,
-    ContentType: `image/${extension}`,
+    Key: s3Key,
+    Body: fileBuffer,
+    ContentType: mimeType,
   });
+
   await s3.send(putCommand);
 }
 
 // Process form fields
-async function processFormData(
-  formData: FormDataResult[],
-  client: PoolConnection,
-) {
-  let additionalData: EventBody = {};
+async function processFormData(formData, client) {
+  let additionalData = {};
 
   for (const item of formData) {
-    await processFileItem(item, client, additionalData);
-  }
-}
+    if ('processedImage' in item) {
+      // File data is available
+      const { processedImage, fileName, mimetype } = item;
+      const extension = mimetype.split('/')[1];
 
-async function processFileItem(
-  item: FormDataResult,
-  client: PoolConnection,
-  eventBody: EventBody,
-) {
-  // Check if the item is a file
-  if ('processedImage' in item) {
-    const { processedImage, fileName, extension } = item;
-    try {
-      // Insert metadata into the database
-      const photoId = await insertMetadata(
-        { fileName, extension, ...eventBody },
-        client,
-      );
-
+      let photoId: any;
       try {
-        // Upload the image to S3
-        await uploadToS3(processedImage, fileName, extension);
+        // Insert metadata into the database (adjust insertMetadata to accept additionalData)
+        photoId = await insertMetadata(
+          { fileName, extension, eventBody: additionalData },
+          client,
+        );
+      } catch (e) {
+        console.error('Error inserting metadata into RDS:', e);
+      }
+      try {
+        // Upload file to S3
+        await uploadToS3(processedImage, fileName, mimetype);
       } catch (s3Error) {
         // Attempt to delete database record if S3 upload fails
         await deleteMetadata(photoId, client);
@@ -364,11 +395,9 @@ async function processFileItem(
           `Error uploading file ${fileName}.${extension} to S3. Database record rolled back. ${s3Error}`,
         );
       }
-    } catch (metadataError) {
-      console.error('Error inserting metadata into RDS:', metadataError);
-      throw new DatabaseError(
-        `Error inserting metadata for file ${fileName}.${extension} into the database. ${metadataError}`,
-      );
+    } else {
+      // Handle additional form data for database insertion
+      additionalData[item.key] = item.value;
     }
   }
 }

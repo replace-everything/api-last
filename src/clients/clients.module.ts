@@ -11,5 +11,6 @@ import { Client } from './entities/client.entity';
   imports: [TypeOrmModule.forFeature([Client, Invoice, Lead, User])],
   controllers: [PQClientController],
   providers: [PQClientService],
+  exports: [PQClientService, TypeOrmModule],
 })
 export class ClientsModule {}

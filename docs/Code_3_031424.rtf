@@ -1,0 +1,960 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2759
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 import \{ Controller, Get, Query, Param, Req, Put, Body, Delete, UseGuards \} from '@nestjs/common';\
+import \{ ApiOperation, ApiResponse, ApiTags, ApiQuery, ApiParam, ApiBearerAuth \} from '@nestjs/swagger';\
+import \{ PaginationPipe \} from '../common/pipes/pagination.pipe';\
+import \{ User \} from '../users/entities/user.entity';\
+import \{ Lead \} from '../leads/entities/lead.entity';\
+import \{ Event \} from '../events/entities/event.entity';\
+import \{ Inspection \} from '../inspections/entities/inspection.entity';\
+import \{ Client \} from '../clients/entities/client.entity';\
+import \{ Task \} from '../tasks/entities/task.entity';\
+import \{ Invoice \} from '../invoices/entities/invoice.entity';\
+import \{ JwtAuthGuard \} from '../common/guards/jwt-auth.guard';\
+import \{ ModuleRef \} from '@nestjs/core';\
+import \{ UsersService \} from './users.service';\
+\
+@ApiTags('users')\
+@Controller('users')\
+export class UsersController \{\
+\
+  constructor(\
+    private usersService: UsersService,\
+    private moduleRef: ModuleRef,\
+  ) \{\}\
+\
+  onModuleInit() \{\
+    this.usersService = this.moduleRef.get(UsersService, \{ strict: false \});\
+  \}\
+\
+  @Put('/:uid')\
+  @UseGuards(JwtAuthGuard)\
+  @ApiBearerAuth()\
+  @ApiOperation(\{ summary: 'Update a user' \})\
+  @ApiParam(\{ name: 'uid', description: 'The unique ID of the user' \})\
+  @ApiResponse(\{ status: 200, description: 'User updated successfully.', type: User \})\
+  async updateUser(@Param('uid') uid: number, @Body() updateUserDto: Partial<User>, @Req() req) \{\
+    const schema = req.user?.schema;\
+    return await this.usersService.updateUser(uid, updateUserDto, schema);\
+  \}\
+\
+  @Delete('/:uid')\
+  @UseGuards(JwtAuthGuard)\
+  @ApiBearerAuth()\
+  @ApiOperation(\{ summary: 'Delete a user' \})\
+  @ApiParam(\{ name: 'uid', description: 'The unique ID of the user' \})\
+  @ApiResponse(\{ status: 200, description: 'User deleted successfully.' \})\
+  async deleteUser(@Param('uid') uid: number, @Req() req) \{\
+    const schema = req.user?.schema;\
+    return await this.usersService.deleteUser(uid, schema);\
+  \}\
+\
+  @Get('/')\
+  @UseGuards(JwtAuthGuard)\
+  @ApiBearerAuth()\
+  @ApiOperation(\{ summary: 'Retrieves a paginated list of users' \})\
+  @ApiQuery(\{ name: 'page', required: false, description: 'Page number' \})\
+  @ApiQuery(\{ name: 'limit', required: false, description: 'Items per page' \})\
+  @ApiResponse(\{ status: 200, description: 'Users retrieved', type: [User] \})\
+  async findAll(@Query(PaginationPipe) pagination: PaginationPipe, @Req() req): Promise<User[]> \{\
+    const schema = req.user?.schema;\
+    return await this.usersService.findAll(schema, pagination);\
+  \}\
+\
+  @Get('/:uid')\
+  @UseGuards(JwtAuthGuard)\
+  @ApiBearerAuth()\
+  @ApiOperation(\{ summary: 'Finds a single user by ID' \})\
+  @ApiParam(\{ name: 'uid', description: 'The unique ID of the user' \})\
+  @ApiResponse(\{ status: 200, description: 'User found', type: User \})\
+  async findOne(@Param('uid') uid: number, @Req() req): Promise<User> \{\
+    const schema = req.user?.schema;\
+    return await this.usersService.findOne(schema, uid);\
+  \}\
+\
+  @Get('/:uid')\
+@UseGuards(JwtAuthGuard)\
+@ApiBearerAuth()\
+@ApiOperation(\{ summary: 'Finds a single user by ID' \})\
+@ApiParam(\{ name: 'uid', description: 'The unique ID of the user' \})\
+@ApiResponse(\{ status: 200, description: 'User found', type: User \})\
+async findOne(@Param('uid') uid: number, @Req() req): Promise<User> \{\
+  const schema = req.user?.schema;\
+  return await this.usersService.findOne(schema, uid);\
+\}\
+\
+@Get('/:uid/leads')\
+@UseGuards(JwtAuthGuard)\
+@ApiBearerAuth()\
+@ApiOperation(\{ summary: 'Retrieves leads for a specific user' \})\
+@ApiParam(\{ name: 'uid', description: 'The unique ID of the user' \})\
+@ApiQuery(\{ name: 'page', required: false \})\
+@ApiQuery(\{ name: 'limit', required: false \})\
+@ApiResponse(\{ status: 200, description: 'Leads found', type: [Lead] \})\
+async findLeadsByUserId(@Param('uid') uid: number, @Query(PaginationPipe) pagination: PaginationPipe, @Req() req): Promise<Lead[]> \{\
+  const schema = req.user?.schema;\
+  return await this.usersService.findLeadsByUserId(schema, uid, pagination);\
+\}\
+\
+@Get('/:uid/inspections')\
+@UseGuards(JwtAuthGuard)\
+@ApiBearerAuth()\
+@ApiOperation(\{ summary: 'Retrieves inspections for a specific user' \})\
+@ApiParam(\{ name: 'uid', description: 'The unique ID of the user' \})\
+@ApiQuery(\{ name: 'page', required: false \})\
+@ApiQuery(\{ name: 'limit', required: false \})\
+@ApiResponse(\{ status: 200, description: 'Inspections found', type: [Inspection] \})\
+async findInspectionsByUserId(@Param('uid') uid: number, @Query(PaginationPipe) pagination: PaginationPipe, @Req() req): Promise<Inspection[]> \{\
+  const schema = req.user?.schema;\
+  return await this.usersService.findInspectionsByUserId(schema, uid, pagination);\
+\}\
+\
+@Get('/:uid/invoices')\
+@UseGuards(JwtAuthGuard)\
+@ApiBearerAuth()\
+@ApiOperation(\{ summary: 'Retrieves invoices for a specific user' \})\
+@ApiParam(\{ name: 'uid', description: 'The unique ID of the user' \})\
+@ApiQuery(\{ name: 'page', required: false \})\
+@ApiQuery(\{ name: 'limit', required: false \})\
+@ApiResponse(\{ status: 200, description: 'Invoices found', type: [Invoice] \})\
+async findInvoicesByUserId(@Param('uid') uid: number, @Query(PaginationPipe) pagination: PaginationPipe, @Req() req): Promise<Invoice[]> \{\
+  const schema = req.user?.schema;\
+  return await this.usersService.findInvoicesByUserId(schema, uid, pagination);\
+\}\
+\
+@Get('/:uid/clients')\
+@UseGuards(JwtAuthGuard)\
+@ApiBearerAuth()\
+@ApiOperation(\{ summary: 'Retrieves clients for a specific user' \})\
+@ApiParam(\{ name: 'uid', description: 'The unique ID of the user' \})\
+@ApiQuery(\{ name: 'page', required: false \})\
+@ApiQuery(\{ name: 'limit', required: false \})\
+@ApiResponse(\{ status: 200, description: 'Clients found', type: [Client] \})\
+async findClientsByUserId(@Param('uid') uid: number, @Query(PaginationPipe) pagination: PaginationPipe, @Req() req): Promise<Client[]> \{\
+  const schema = req.user?.schema;\
+  return await this.usersService.findClientsByUserId(schema, uid, pagination);\
+\}\
+\
+\
+  @Get('/:uid/events')\
+  @UseGuards(JwtAuthGuard)\
+  @ApiBearerAuth()\
+  @ApiOperation(\{ summary: 'Retrieves events for a specific user' \})\
+  @ApiParam(\{ name: 'uid', description: 'The unique ID of the user' \})\
+  @ApiQuery(\{ name: 'page', required: false \})\
+  @ApiQuery(\{ name: 'limit', required: false \})\
+  @ApiResponse(\{ status: 200, description: 'Events found', type: [Event] \})\
+  async findEventsByUserId(@Param('uid') uid: number, @Query(PaginationPipe) pagination: PaginationPipe, @Req() req): Promise<Event[]> \{\
+    const schema = req.user?.schema;\
+    return await this.usersService.findEventsByUserId(schema, uid, pagination);\
+  \}\
+\
+  @Get('/:uid/tasks')\
+  @UseGuards(JwtAuthGuard)\
+  @ApiBearerAuth()\
+  @ApiOperation(\{ summary: 'Retrieves tasks for a specific user' \})\
+  @ApiParam(\{ name: 'uid', description: 'The unique ID of the user' \})\
+  @ApiQuery(\{ name: 'page', required: false \})\
+  @ApiQuery(\{ name: 'limit', required: false \})\
+  @ApiResponse(\{ status: 200, description: 'Tasks found', type: [Task] \})\
+  async findTasksByUserId(\
+    @Param('uid') uid: number,\
+    @Query(PaginationPipe) pagination: PaginationPipe,\
+    @Req() req,\
+  ): Promise<Task[]> \{\
+    const schema = req.user?.schema;\
+    return await this.usersService.findTasksByUserId(schema, uid, pagination);\
+  \}\
+\
+  @Get('/search')\
+  @UseGuards(JwtAuthGuard)\
+  @ApiBearerAuth()\
+  @ApiOperation(\{ summary: 'Search users by partial or full name' \})\
+  @ApiQuery(\{\
+    name: 'query',\
+    required: true,\
+    description: 'Partial or full first name, last name, or full name',\
+  \})\
+  @ApiResponse(\{ status: 200, description: 'Search results', type: [User] \})\
+  async searchUsers(\
+    @Query('query') query: string,\
+    @Req() req,\
+  ): Promise<User[]> \{\
+    const schema = req.user?.schema;\
+    return await this.usersService.searchByName(schema, query);\
+  \}\
+\}\
+import \{ Expose \} from 'class-transformer';\
+import \{ Lead \} from '../../leads/entities/lead.entity';\
+import \{\
+  Entity,\
+  PrimaryGeneratedColumn,\
+  Column,\
+  OneToMany,\
+  RelationId,\
+\} from 'typeorm';\
+\
+@Entity('PQ_user')\
+export class User \{\
+  @PrimaryGeneratedColumn(\{ type: 'int', comment: 'User ID' \})\
+  uid: number;\
+\
+  @Column(\{ type: 'varchar', length: 60, nullable: true \})\
+  ulogin: string;\
+\
+  @Column(\{ type: 'varchar', length: 255, nullable: true \})\
+  upass: string;\
+\
+  @Column(\{ type: 'varchar', length: 48, nullable: true \})\
+  ufirstn: string;\
+\
+  @Column(\{ type: 'varchar', length: 72, nullable: true \})\
+  ulastn: string;\
+\
+  @Column(\{ type: 'varchar', length: 72, nullable: true \})\
+  uemail: string;\
+\
+  @Column(\{ type: 'bigint', nullable: true \})\
+  uphone: number;\
+\
+  @Column(\{ type: 'bigint', nullable: true \})\
+  uphonemobile: number;\
+\
+  @Column(\{ type: 'datetime', nullable: true \})\
+  uadddts: Date;\
+\
+  @Column(\{ type: 'int', width: 6, nullable: true \})\
+  uaddid: number;\
+\
+  @Column(\{ type: 'datetime', nullable: true \})\
+  ueditdts: Date;\
+\
+  @Column(\{ type: 'int', width: 6, nullable: true \})\
+  ueditid: number;\
+\
+  @Column(\{ type: 'datetime', nullable: true \})\
+  ulastlogin: Date;\
+\
+  @Column(\{ type: 'datetime', nullable: true \})\
+  ulastdts: Date;\
+\
+  @Column(\{ type: 'datetime', nullable: true \})\
+  ulastpassdts: Date;\
+\
+  @Column(\{ type: 'varchar', length: 3, nullable: true \})\
+  uestimate: string;\
+\
+  @Column(\{ type: 'varchar', length: 3, nullable: true \})\
+  uclients: string;\
+\
+  @Column(\{ type: 'varchar', length: 3, nullable: true \})\
+  ujobs: string;\
+\
+  @Column(\{ type: 'varchar', length: 3, nullable: true \})\
+  uinstaller: string;\
+\
+  @Column(\{ type: 'varchar', length: 3, nullable: true \})\
+  utemplates: string;\
+\
+  @Column(\{ type: 'varchar', length: 50, nullable: true \})\
+  usuper: string;\
+\
+  @Column(\{ type: 'varchar', length: 50, nullable: true \})\
+  ustatus: string;\
+\
+  @Column(\{ type: 'int', width: 8, nullable: true, default: () => "'0'" \})\
+  uexpire: number;\
+\
+  @Column(\{ type: 'varchar', length: 24, nullable: true \})\
+  utitl: string;\
+\
+  @Column(\{ type: 'varchar', length: 6, nullable: true \})\
+  usys: string;\
+\
+  @Column(\{ type: 'varchar', length: 8, nullable: true \})\
+  ulock: string;\
+\
+  @Column(\{ type: 'varchar', length: 100, nullable: true \})\
+  umenuoverride: string;\
+\
+  @Column(\{ type: 'int', width: 11, nullable: true, default: () => "'1'" \})\
+  ucid: number;\
+\
+  @Column(\{ type: 'varchar', length: 3, nullable: true \})\
+  uaddpart: string;\
+\
+  @Column(\{ type: 'varchar', length: 3, nullable: true \})\
+  uaddpartrate: string;\
+\
+  @Column(\{ type: 'varchar', length: 3, nullable: true \})\
+  udefLot: string;\
+\
+  @Column(\{ type: 'varchar', length: 3, nullable: true \})\
+  ucntE: string;\
+\
+  @Column(\{ type: 'varchar', length: 7, nullable: true \})\
+  ucolor: string;\
+\
+  @Column(\{ type: 'varchar', length: 128, nullable: true \})\
+  ukey: string;\
+\
+  @Column(\{ type: 'text', nullable: true \})\
+  uperms: string;\
+\
+  @Column(\{ type: 'varchar', length: 60, nullable: true \})\
+  ustart: string;\
+\
+  @Column(\{ type: 'varchar', length: 60, nullable: true \})\
+  ustartmobile: string;\
+\
+  @Column(\{ type: 'varchar', length: 60, nullable: true \})\
+  ufieldRe: string;\
+\
+  @Column(\{ type: 'text', nullable: true \})\
+  uroles: string;\
+\
+  @Column(\{ type: 'text', nullable: true \})\
+  urolesBKUP: string;\
+\
+  @Column(\{ type: 'text', nullable: true \})\
+  uassign: string;\
+\
+  @Column(\{ type: 'text', nullable: true \})\
+  uwidgets: string;\
+\
+  @Column(\{ type: 'double', precision: 5, scale: 2, nullable: true \})\
+  urate: number;\
+\
+  @Column(\{ type: 'varchar', length: 2, nullable: true \})\
+  ulang: string;\
+\
+  @Column(\{ type: 'varchar', length: 50, nullable: true \})\
+  uintegrationcc: string;\
+\
+  @Column(\{ type: 'varchar', length: 84, nullable: true \})\
+  ucompanies: string;\
+\
+  @Column(\{ type: 'text', nullable: true \})\
+  uservices: string;\
+\
+  @Column(\{ type: 'int', width: 7, nullable: true \})\
+  usalesgoal: number;\
+\
+  @Column(\{ type: 'bigint', nullable: true \})\
+  usalesgoaly: number;\
+\
+  @Column(\{ type: 'tinyint', nullable: true \})\
+  ustagingaccess: boolean;\
+\
+  @Column(\{ type: 'tinyint', nullable: true \})\
+  umasteraccess: boolean;\
+\
+  @OneToMany(() => Lead, (lead: Lead) => lead.user)\
+  leads?: Lead[];\
+\
+  @Expose()\
+  @RelationId((user: User) => user.leads)\
+  leadIds: number[];\
+\}\
+import \{ Module \} from '@nestjs/common';\
+import \{ TypeOrmModule \} from '@nestjs/typeorm';\
+import \{ UsersService \} from './users.service';\
+import \{ Lead \} from '../leads/entities/lead.entity';\
+import \{ Invoice \} from '../invoices/entities/invoice.entity';\
+import \{ UsersController \} from './users.controller';\
+import \{ Client \} from '../clients/entities/client.entity';\
+import \{ PassportModule \} from '@nestjs/passport';\
+import \{ JwtStrategy \} from '../auth/jwt.strategy';\
+import \{ ConfigModule \} from '@nestjs/config';\
+import \{ User \} from './entities/user.entity';\
+\
+@Module(\{\
+  imports: [\
+    TypeOrmModule.forFeature([User, Lead, Invoice, Client]),\
+    PassportModule,\
+    ConfigModule,\
+  ],\
+  providers: [UsersService, JwtStrategy],\
+  exports: [TypeOrmModule, UsersService],\
+  controllers: [UsersController],\
+\})\
+export class UsersModule \{\}\
+export class Client \{\
+  cid: number;\
+  cuid?: number;\
+  cadate?: Date;\
+  cedate?: Date;\
+  ctype?: string;\
+  cstatus?: string;\
+  clientstatus?: string;\
+  clientsubstatus?: string;\
+  cismgmt?: string;\
+  ccomp?: string;\
+  caddr1?: string;\
+  caddr2?: string;\
+  ccity?: string;\
+  cst?: string;\
+  czip?: number;\
+  cphone?: string;\
+  cphonebilling?: string;\
+  caltphone?: string;\
+  csmsphone?: string;\
+  cext?: string;\
+  cfax?: string;\
+  ccontact?: string;\
+  ctitle?: string;\
+  cemail?: string;\
+  cemailAlt?: string;\
+  cemailAlt2?: string;\
+  cemailAlt3?: string;\
+  cemailAlt4?: string;\
+  cemailAlt5?: string;\
+  cemailAlt6?: string;\
+  ccontact2?: string;\
+  ctitle2?: string;\
+  cphone2?: string;\
+  cext2?: string;\
+  cemail2?: string;\
+  cemail2cc?: string;\
+  cemailbilling?: string;\
+  caltemailbilling?: string;\
+  curl?: string;\
+  cnotes?: string;\
+  cpayterms?: string;\
+  cview?: string;\
+  csalesid?: number;\
+  creferral?: string;\
+  cwon?: Date;\
+  clost?: Date;\
+  cqbid?: number;\
+  cqbresp?: string;\
+  clatefee?: number;\
+  cwaivelate?: string;\
+  clotid?: number;\
+  cinid?: number;\
+  capp?: boolean;\
+  cinvpays?: string;\
+  cstatus2?: string;\
+  cstatusuid?: number;\
+  cstatusreason?: string;\
+  cstatusdate?: Date;\
+  clatlon?: string;\
+  cnnote?: string;\
+  cinspection?: Date;\
+  clastcontact?: Date;\
+  clastcontactuid?: number;\
+\}\
+// src/app.module.ts\
+import \{\
+  MiddlewareConsumer,\
+  Module,\
+  NestModule,\
+  OnModuleInit,\
+\} from '@nestjs/common';\
+import \{ ConfigModule \} from '@nestjs/config';\
+import \{ AuthModule \} from './auth/auth.module';\
+import \{ AppController \} from './app.controller';\
+import \{ AppService \} from './app.service';\
+import \{ SwaggerController \} from './swagger/swagger.controller';\
+import \{ LazyModule \} from './lazy/lazy.module';\
+// import \{ RouteBasedLazyLoaderMiddleware \} from './route-based-lazy-loader.middleware';\
+import \{ LazyModuleLoader, RouterModule \} from '@nestjs/core';\
+import \{ EventsModule \} from './events/events.module';\
+import \{ UsersModule \} from './users/users.module';\
+import \{ LeadsModule \} from './leads/leads.module';\
+import \{ InvoicesModule \} from './invoices/invoices.module';\
+import \{ PhotosModule \} from './photos/photos.module';\
+import \{ InspectionsModule \} from './inspections/inspections.module';\
+import \{ TasksModule \} from './tasks/tasks.module';\
+import \{ ContingenciesModule \} from './contingencies/contingencies.module';\
+import \{ LeadPhotoModule \} from './lead-photos/lead-photos.module';\
+import \{ FeatureModule \} from './feature-module';\
+import \{ DatabaseConfigModule \} from './config/database-config.module';\
+import \{ DatabaseModule \} from './database.module';\
+\
+@Module(\{\
+  imports: [\
+    AuthModule,\
+    ConfigModule.forRoot(\{\
+      isGlobal: true,\
+      envFilePath: '../.env',\
+    \}),\
+    FeatureModule,\
+    AuthModule,\
+    DatabaseConfigModule,\
+    DatabaseModule,\
+  ],\
+  controllers: [AppController, SwaggerController],\
+  providers: [AppService],\
+\})\
+export class AppModule implements NestModule, OnModuleInit \{\
+\
+  onModuleInit() \{\
+    // * Optional initialization logic on module start\
+  \}\
+\
+  configure(consumer: MiddlewareConsumer) \{\
+  // configure(cqwonsumer: MiddlewareConsumer) \{\
+    // console.log('Applying RouteBasedLazyLoaderMiddleware');\
+    \
+    // consumer.apply(async (req, res, next) => \{\
+    //   console.log('Inside middleware factory function');\
+    //   // const middleware = new RouteBasedLazyLoaderMiddleware(this.lazyModuleLoader);\
+    //   // console.log('Middleware instance created:', middleware);\
+    //   try \{\
+    //     // await middleware.use(req, res, next);\
+    //     console.log('Middleware execution completed');\
+    //   \} catch (error) \{\
+    //     console.error('Error in middleware execution:', error);\
+    //     next(error);\
+    //   \}\
+    // \}).forRoutes('*');\
+    \
+    // console.log('Middleware applied');\
+  \}\
+\}\
+// // src/test.controller.ts\
+// import \{ Controller, Get \} from '@nestjs/common';\
+// import \{ DatabaseConfigService \} from './database-config.service';\
+\
+// @Controller('test-db')\
+// export class DatabaseTestController \{\
+//   constructor(private databaseConfigService: DatabaseConfigService) \{\}\
+\
+//   @Get('dbconfig')\
+//   getDbConfig() \{\
+//     return this.databaseConfigService.getDatabaseConfig();\
+//   \}\
+// \}\
+import \{ Injectable, InternalServerErrorException \} from '@nestjs/common';\
+import \{ InjectRepository \} from '@nestjs/typeorm';\
+import \{ Repository \} from 'typeorm';\
+import \{ Event \} from './entities/event.entity';\
+\
+@Injectable()\
+export class PQEventsService \{\
+  constructor(\
+    @InjectRepository(Event)\
+    private readonly pqEventsRepository: Repository<Event>,\
+  ) \{\}\
+\
+  async create(schema: string, createPQEventDto: Event): Promise<Event> \{\
+    try \{\
+      const pqEvent = this.pqEventsRepository.create(createPQEventDto);\
+      return await this.pqEventsRepository.manager.save(\
+        `$\{schema\}.PQ_events`,\
+        pqEvent,\
+      );\
+    \} catch (error) \{\
+      throw new InternalServerErrorException('Failed to create event');\
+    \}\
+  \}\
+\
+  async findAll(schema: string): Promise<Event[]> \{\
+    try \{\
+      return await this.pqEventsRepository.manager.query(\
+        `SELECT * FROM $\{schema\}.PQ_events;`,\
+      );\
+    \} catch (error) \{\
+      throw new InternalServerErrorException('Failed to fetch events');\
+    \}\
+  \}\
+\
+  async findOne(schema: string, id: number): Promise<Event> \{\
+    try \{\
+      const [event] = await this.pqEventsRepository.manager.query(\
+        `SELECT * FROM $\{schema\}.PQ_events WHERE eid = '$\{id\}';`,\
+      );\
+      return event;\
+    \} catch (error) \{\
+      throw new InternalServerErrorException('Failed to fetch event');\
+    \}\
+  \}\
+\
+  private escapeSQLString(value) \{\
+    if (typeof value === 'string') \{\
+      // Simple escape for single quotes - this is a naive approach, be very cautious!\
+      return `'$\{value.replace(/'/g, "''")\}'`;\
+    \}\
+    return value;\
+  \}\
+\
+  async update(\
+    schema: string,\
+    id: number,\
+    updatePQEventDto: Partial<Event>,\
+  ): Promise<Event> \{\
+    try \{\
+      const setClause = Object.entries(updatePQEventDto)\
+        .map(([key, value]) => `"$\{key\}" = $\{this.escapeSQLString(value)\}`)\
+        .join(', ');\
+      await this.pqEventsRepository.manager.query(\
+        `UPDATE $\{schema\}.PQ_events SET $\{setClause\} WHERE eid = '$\{id\}' returning *;`,\
+      );\
+      return this.findOne(schema, id);\
+    \} catch (error) \{\
+      throw new InternalServerErrorException('Failed to update event');\
+    \}\
+  \}\
+\
+  async remove(schema: string, id: number): Promise<\{ deleted: true \}> \{\
+    try \{\
+      await this.pqEventsRepository.manager.query(\
+        `DELETE FROM $\{schema\}.PQ_events WHERE eid = '$\{id\}';`,\
+      );\
+      return \{ deleted: true \};\
+    \} catch (error) \{\
+      throw new InternalServerErrorException('Failed to delete event');\
+    \}\
+  \}\
+\
+  async findEventsByUserAndDate(\
+    schema: string,\
+    userId: number,\
+    date: Date,\
+  ): Promise<Event[]> \{\
+    try \{\
+      const startDate = new Date(date.setHours(0, 0, 0, 0));\
+      const endDate = new Date(date.setHours(23, 59, 59, 999));\
+      return await this.pqEventsRepository.manager.query(\
+        `SELECT * FROM $\{schema\}.PQ_events WHERE euid = $\{userId\} AND estartdts BETWEEN $\{startDate\} AND $\{endDate\};`,\
+        [userId, startDate, endDate],\
+      );\
+    \} catch (error) \{\
+      throw new InternalServerErrorException(\
+        'Failed to find events by user and date',\
+      );\
+    \}\
+  \}\
+\}\
+import \{ Controller, Get, Post, Body, Patch, Param, Delete, HttpException, HttpStatus, Req, UseGuards, OnModuleInit \} from '@nestjs/common';\
+import \{ ModuleRef \} from '@nestjs/core';\
+import \{ PQClientService \} from './clients.service';\
+import \{ CreatePQClientDto \} from './dtos/client.dto';\
+import \{ ApiTags, ApiOperation, ApiBody, ApiResponse, ApiParam, ApiBearerAuth \} from '@nestjs/swagger';\
+import \{ Client \} from './entities/client.entity';\
+import \{ DeepPartial \} from 'typeorm';\
+import \{ JwtAuthGuard \} from '../common/guards/jwt-auth.guard';\
+\
+@ApiTags('clients')\
+@Controller('clients')\
+export class PQClientController implements OnModuleInit \{\
+  private pqClientService: PQClientService;\
+\
+  constructor(private moduleRef: ModuleRef) \{\}\
+\
+  onModuleInit() \{\
+    this.pqClientService = this.moduleRef.get(PQClientService, \{ strict: false \});\
+  \}\
+\
+\
+  @Post('/create')\
+  @UseGuards(JwtAuthGuard)\
+  @ApiBearerAuth()\
+  @ApiOperation(\{ summary: 'Create a new PQ client' \})\
+  @ApiBody(\{ type: CreatePQClientDto \})\
+  @ApiResponse(\{ status: 201, description: 'Client created', type: Client \})\
+  async create(@Req() req, @Body() createPQClientDto: DeepPartial<Client>) \{\
+    try \{\
+      const schema = req.user?.schema;\
+      return await this.pqClientService.create(schema, createPQClientDto);\
+    \} catch (error) \{\
+      console.error(error);\
+      throw new HttpException(\
+        'Failed to create client',\
+        HttpStatus.INTERNAL_SERVER_ERROR,\
+      );\
+    \}\
+  \}\
+\
+  @Get()\
+@UseGuards(JwtAuthGuard)\
+@ApiBearerAuth()\
+@ApiOperation(\{ summary: 'Retrieve all PQ clients' \})\
+@ApiResponse(\{ status: 200, description: 'Array of clients', type: [Client] \})\
+async findAll(@Req() req) \{\
+  try \{\
+    console.log('Inside findAll controller');\
+    console.log('Request query:', req.query);\
+    console.log('Inside findAll controller method');\
+    const pqClientService = req['service'];\
+    \
+    const unloadedModule = req['module'];\
+    if (unloadedModule) \{\
+      console.log('Loaded Module:', unloadedModule);\
+      console.log("REQ MODULE", req['module']);\
+      console.log("REQ", req);\
+      const pqClientService = unloadedModule.get(PQClientService);\
+      console.log('PQClientService:', pqClientService);\
+      console.log("\\n\\n\\n\\n\\nPQClientService", this.pqClientService, '\\n\\n\\n\\n\\n\\n\\n');\
+      const schema = req.user?.schema;\
+      return await pqClientService.findAll(schema);\
+    \} else \{\
+      throw new Error('Module not loaded');\
+    \}\
+  \} catch (error) \{\
+    console.error(error);\
+    throw new HttpException(\
+      'Failed to fetch clients',\
+      HttpStatus.INTERNAL_SERVER_ERROR,\
+    );\
+  \}\
+\}\
+\
+  @Get(':id')\
+  @UseGuards(JwtAuthGuard)\
+  @ApiBearerAuth()\
+  @ApiOperation(\{ summary: 'Get a PQ client by ID' \})\
+  @ApiParam(\{ name: 'id', type: 'number' \})\
+  @ApiResponse(\{ status: 200, description: 'Client object', type: Client \})\
+  @ApiResponse(\{ status: 404, description: 'Client not found' \})\
+  async findOne(@Req() req, @Param('id') id: string) \{\
+    try \{\
+      const schema = req.user?.schema;\
+      return await this.pqClientService.findOne(schema, +id);\
+    \} catch (error) \{\
+      console.error(error);\
+      throw new HttpException(\
+        'Failed to fetch client by ID',\
+        HttpStatus.INTERNAL_SERVER_ERROR,\
+      );\
+    \}\
+  \}\
+\
+  @Patch(':id')\
+  @UseGuards(JwtAuthGuard)\
+  @ApiBearerAuth()\
+  @ApiOperation(\{ summary: 'Update a PQ client' \})\
+  @ApiParam(\{ name: 'id', type: 'number' \})\
+  @ApiResponse(\{ status: 200, description: 'Client updated', type: Client \})\
+  @ApiResponse(\{ status: 404, description: 'Client not found' \})\
+  async update(\
+    @Req() req,\
+    @Param('id') id: string,\
+    @Body() updatePQClientDto: DeepPartial<Client>,\
+  ) \{\
+    try \{\
+      const schema = req.user?.schema;\
+      return await this.pqClientService.update(schema, +id, updatePQClientDto);\
+    \} catch (error) \{\
+      console.error(error);\
+      throw new HttpException(\
+        'Failed to update client',\
+        HttpStatus.INTERNAL_SERVER_ERROR,\
+      );\
+    \}\
+  \}\
+\
+  @Delete(':id')\
+  @UseGuards(JwtAuthGuard)\
+  @ApiBearerAuth()\
+  @ApiOperation(\{ summary: 'Delete a PQ client' \})\
+  @ApiParam(\{ name: 'id', type: 'number' \})\
+  @ApiResponse(\{ status: 204, description: 'Client deleted' \})\
+  @ApiResponse(\{ status: 404, description: 'Client not found' \})\
+  async remove(@Req() req, @Param('id') id: string) \{\
+    try \{\
+      const schema = req.user?.schema;\
+      return await this.pqClientService.remove(schema, +id);\
+    \} catch (error) \{\
+      console.error(error);\
+      throw new HttpException(\
+        'Failed to delete client',\
+        HttpStatus.INTERNAL_SERVER_ERROR,\
+      );\
+    \}\
+  \}\
+\}\
+import \{ Injectable, OnModuleInit \} from '@nestjs/common';\
+import \{\
+  SecretsManagerClient,\
+  GetSecretValueCommand,\
+\} from '@aws-sdk/client-secrets-manager';\
+import \{ ConfigService \} from '@nestjs/config';\
+import \{ WriteError \} from 'typeorm';\
+\
+@Injectable()\
+export class DatabaseConfigService implements OnModuleInit \{\
+  private secret;\
+  private s3BucketName: string;\
+  private secretsManagerClient = new SecretsManagerClient(\{\
+    region: 'us-east-1',\
+  \});\
+  constructor(private configService: ConfigService) \{\}\
+\
+  async onModuleInit() \{\
+    try \{\
+      this.s3BucketName = `raes-photos-dev`;\
+      await this.fetchSecret();\
+      this.setSecretAsEnv();\
+    \}catch (e) \{\
+      console.log("Error in DB Confir Module Init", e)\
+      throw new WriteError(e);\
+    \}\
+  \}  \
+\
+  private async fetchSecret() \{\
+    const arn = process.env.DB_CREDENTIALS_ARN;\
+    try \{\
+      if (arn) \{\
+        const secretValueResponse = await this.secretsManagerClient.send(\
+          new GetSecretValueCommand(\{ SecretId: arn \}),\
+        );\
+        const secretString = JSON.parse(secretValueResponse.SecretString);\
+        this.secret = secretString;\
+      \} else \{\
+        console.error(\
+          'No matching secret found for the provided partial ARN:',\
+          arn,\
+        );\
+        throw new Error('SecretNotFound');\
+      \}\
+    \} catch (error) \{\
+      console.error('Error fetching secret from AWS Secrets Manager:', error);\
+      throw error;\
+    \}\
+  \}\
+\
+  async getDatabaseConfig() \{\
+    if (this.secret) \{\
+      return \{\
+        type: this.secret.engine,\
+        host: this.secret.host,\
+        port: this.secret.port,\
+        username: this.secret.username,\
+        password: this.secret.password,\
+      \};\
+    \} else \{\
+      await this.fetchSecret();\
+      return \{\
+        type: this.secret.engine,\
+        host: this.secret.host,\
+        port: this.secret.port,\
+        username: this.secret.username,\
+        password: this.secret.password,\
+      \};\
+    \}\
+  \}\
+\
+  getS3BucketName(): string \{\
+    return this.s3BucketName;\
+  \}\
+\
+  private setSecretAsEnv() \{\
+    if (this.secret) \{\
+      Object.entries(this.secret).forEach(([key, value]) => \{\
+        this.configService.set(key, value);\
+        process.env[key] = `$\{value\}`;\
+      \});\
+    \}\
+  \}\
+\}\
+// feature.module.ts\
+import \{ Module, Global \} from '@nestjs/common';\
+import \{ DynamicModuleLoaderService \} from './dynamic-module-loader.service';\
+\
+@Global() // Optionally make this module globally available\
+@Module(\{\
+  providers: [DynamicModuleLoaderService],\
+  exports: [DynamicModuleLoaderService],\
+\})\
+export class FeatureModule \{\}\
+// src/middleware/route-based-lazy-loader.middleware.ts\
+import \{ Global, Injectable, NestMiddleware, Logger \} from '@nestjs/common';\
+import \{ LazyModuleLoader \} from '@nestjs/core';\
+import \{ Request, Response, NextFunction \} from 'express';\
+import \{ resolve \} from 'path';\
+\
+@Global()\
+@Injectable()\
+export class RouteBasedLazyLoaderMiddleware implements NestMiddleware \{\
+  private readonly logger = new Logger(RouteBasedLazyLoaderMiddleware.name);\
+  private readonly moduleCache = new Map<string, any>();\
+\
+  constructor(private lazyModuleLoader: LazyModuleLoader) \{\}\
+\
+  async use(req: Request, res: Response, next: NextFunction) \{\
+    this.logger.log(`Request URL: $\{req.originalUrl\}`);\
+\
+    let moduleLoaded = false;\
+\
+    switch (true) \{\
+      case req.originalUrl?.startsWith('/clients'):\
+        moduleLoaded = await this.loadModule('dist/modules/clients.modules.ts', 'ClientsModule');\
+        break;\
+      case req.originalUrl?.startsWith('/users'):\
+        try \{\
+          moduleLoaded = await this.loadModule('dist/modules/users.modules.ts', 'UsersModule');\
+        \} catch (e) \{\
+          console.log("No match in Cache")\
+        \}\
+        break;\
+      case req.originalUrl?.startsWith('/leads'):\
+        moduleLoaded = await this.loadModule('dist/modules/leads.modules.ts', 'LeadsModule');\
+        break;\
+      case req.originalUrl?.startsWith('/buildings'):\
+        moduleLoaded = await this.loadModule('dist/modules/buildings.modules.ts', 'BuildingsModule');\
+        break;\
+      case req.originalUrl?.startsWith('/companies'):\
+        moduleLoaded = await this.loadModule('dist/modules/companies.modules.ts', 'CompaniesModule');\
+        break;\
+      case req.originalUrl?.startsWith('/contingencies'):\
+        moduleLoaded = await this.loadModule('dist/modules/contingencies.modules.ts', 'ContingenciesModule');\
+        break;\
+      case req.originalUrl?.startsWith('/events'):\
+        moduleLoaded = await this.loadModule('dist/modules/events.modules.ts', 'EventsModule');\
+        break;\
+      case req.originalUrl?.startsWith('/inspections'):\
+        moduleLoaded = await this.loadModule('dist/modules/inspections.modules.ts', 'InspectionsModule');\
+        break;\
+      case req.originalUrl?.startsWith('/invoices'):\
+        moduleLoaded = await this.loadModule('dist/modules/invoices.modules.ts', 'InvoicesModule');\
+        break;\
+      case req.originalUrl?.startsWith('/lead-photos'):\
+        moduleLoaded = await this.loadModule('dist/modules-photos/lead-photsos.module', 'LeadPhotoModule');\
+        break;\
+      case req.originalUrl?.startsWith('/photos'):\
+        moduleLoaded = await this.loadModule('dist/modules/photos.modules.ts', 'PhotosModule');\
+        break;\
+      case req.originalUrl?.startsWith('/tasks'):\
+        moduleLoaded = await this.loadModule('dist/modules/tasks.modules.ts', 'TasksModule');\
+        break;\
+      default:\
+        this.logger.log('No matching module found for the request URL');\
+        break;\
+    \}\
+\
+    if (!moduleLoaded) \{\
+      this.logger.log('No module loaded for the request URL');\
+    \}\
+\
+    this.logger.log('Passing request to the next middleware');\
+    await next(\{ module \}); \
+  \}\
+\
+  private async loadModule(modulePath: string, moduleName: string): Promise<boolean> \{\
+    console.log("\\n\\n\\n\\nModule Name: ", moduleName)\
+    console.log("\\n\\n\\n\\nModule Cache: ", this.moduleCache)\
+    if (this.moduleCache.has(moduleName)) \{\
+      this.logger.log(`Using cached $\{moduleName\}`);\
+      return true;\
+    \}\
+\
+    try \{\
+      this.logger.log(`Loading $\{moduleName\}`);\
+      const importedModule = await import(modulePath);\
+      await this.lazyModuleLoader.load(() => importedModule[moduleName]);\
+      this.moduleCache.set(moduleName, importedModule[moduleName]);\
+      this.logger.log(`$\{moduleName\} loaded`);\
+      return true;\
+    \} catch (error) \{\
+      this.logger.error(`Error loading module: $\{error.message\}`, error.stack);\
+      // Handle the error appropriately (e.g., return an error response)\
+      throw error;\
+    \}\
+  \}}

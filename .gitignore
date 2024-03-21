@@ -1,12 +1,19 @@
 # compiled output
 /dist
 /node_modules
+*/node_modules
 /node_modules/*
+*/node_modules/*
 /.build
+/micro
 .yarn
 .aws
 .env
-.env/*
+env.collection/.env.local
+env.collection/.env.dev
+env.collection/.env.staging
+env.collection/.env.prod
+
 .serverless
 raes-api.pem
 

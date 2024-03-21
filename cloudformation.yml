@@ -1,0 +1,173 @@
+Parameters:
+  AppImageUri:
+    Type: String
+    Description: URI for the raes-mobile-api Docker image
+    Default: 712114882498.dkr.ecr.us-east-1.amazonaws.com/raes:0.0.1
+  ECSTaskExecutionRoleArn:
+    Type: String
+    Description: ARN for the ECS task execution role
+    Default: arn:aws:iam::712114882498:role/ECSTaskExecution
+  LogGroupName:
+    Type: String
+    Description: Name of the CloudWatch log group for ECS task logs
+    Default: /ecs/raes-mobile-api
+
+Resources:
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: NestFastifyAppCluster
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
+
+  ECSTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: nest-fastify-app
+      NetworkMode: awsvpc
+      ExecutionRoleArn: !Ref ECSTaskExecutionRole
+      ContainerDefinitions:
+        - Name: raes-mobile-api
+          Image: !Ref AppImageUri
+          PortMappings:
+            - ContainerPort: 3000
+              HostPort: 3000
+          Secrets:
+            - Name: CORS_ORIGIN
+              ValueFrom: 'arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:CORS_ORIGIN::'
+            - Name: BUCKET_NAME
+              ValueFrom: 'arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:BUCKET_NAME::'
+            - Name: DB_CREDENTIALS_ARN
+              ValueFrom: 'arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:DB_CREDENTIALS_ARN::'
+            - Name: NODE_ENV
+              ValueFrom: 'arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:NODE_ENV::'
+            - Name: SECRET_KEY
+              ValueFrom: 'arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:SECRET_KEY::'
+            - Name: DYNAMODB_SESSION_TABLE_NAME
+              ValueFrom: 'arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:DYNAMODB_SESSION_TABLE_NAME::'
+            - Name: DYNAMODB_USERID_TABLE_NAME
+              ValueFrom: 'arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:DYNAMODB_USERID_TABLE_NAME::'
+            - Name: username
+              ValueFrom: 'arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:username::'
+            - Name: password
+              ValueFrom: 'arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:password::'
+            - Name: host
+              ValueFrom: 'arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:host::'
+            - Name: database
+              ValueFrom: 'arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:database::'
+            - Name: port
+              ValueFrom: 'arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:port::'
+            - Name: engine
+              ValueFrom: 'arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:engine::'
+            - Name: PKCE_CLIENT_ID
+              ValueFrom: 'arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:PKCE_CLIENT_ID::'
+            - Name: PKCE_CLIENT_SECRET
+              ValueFrom: 'arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:PKCE_CLIENT_SECRET::'
+            - Name: PKCE_AUTHORIZATION_URL
+              ValueFrom: 'arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:PKCE_AUTHORIZATION_URL::'
+            - Name: PKCE_TOKEN_URL
+              ValueFrom: 'arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:PKCE_TOKEN_URL::'
+            - Name: PKCE_CALLBACK_URL
+              ValueFrom: 'arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:PKCE_CALLBACK_URL::'
+            - Name: PKCE_SCOPE
+              ValueFrom: 'arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:PKCE_SCOPE::'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroupName
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: ecs
+
+  ECSService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: NestFastifyAppService
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref ECSTaskDefinition
+      DesiredCount: 1
+      LaunchType: EC2
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets:
+            - subnet-0af6ec35e3762ff4e
+            - subnet-0220b3a1b606454f7
+            - subnet-0583a77dce7f538d7
+            - subnet-0c78c6fb33cd18c32
+            - subnet-04b745d52ab07885b
+            - subnet-0de008bfd82f44f4d
+          SecurityGroups:
+            - sg-01a3240ea5b7293f2
+            - sg-06529264c65f469e1
+
+  APIGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: NestFastifyAppAPI
+      Description: API Gateway for NestJS Fastify App
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  APIGatewayResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref APIGateway
+      ParentId: !GetAtt APIGateway.RootResourceId
+      PathPart: '{proxy+}'
+
+  APIGatewayMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGateway
+      ResourceId: !Ref APIGatewayResource
+      HttpMethod: ANY
+      AuthorizationType: NONE
+      Integration:
+        Type: HTTP_PROXY
+        IntegrationHttpMethod: ANY
+        Uri: !Sub 'http://${ECSService.LoadBalancers[0].DNSName}/{proxy}'
+        PassthroughBehavior: WHEN_NO_MATCH
+        IntegrationResponses:
+          - StatusCode: 200
+        RequestParameters:
+          integration.request.path.proxy: method.request.path.proxy
+
+  APIGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - APIGatewayMethod
+    Properties:
+      RestApiId: !Ref APIGateway
+
+  APIGatewayStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      StageName: prod
+      RestApiId: !Ref APIGateway
+      DeploymentId: !Ref APIGatewayDeployment
+
+  DynamoDBSessionTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: 'local-UsersSessions'
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+Outputs:
+  APIGatewayEndpoint:
+    Value: !Sub 'https://${APIGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/'

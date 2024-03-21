@@ -1,104 +1,142 @@
+// src/main.ts
 import { FastifyInstance } from 'fastify';
 import { ValidationPipe, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
 import {
   FastifyAdapter,
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
 import { AppModule } from './app.module';
 import { proxy } from 'aws-serverless-fastify';
-import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { PaginationPipe } from './common/pipes/pagination.pipe';
 import multipart from '@fastify/multipart';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import fastifyStatic from '@fastify/static';
+import 'reflect-metadata';
+import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import path from 'path';
+import { InternalServerError } from '@aws-sdk/client-dynamodb';
 
 export interface NestApp {
   app: NestFastifyApplication;
   instance: FastifyInstance;
 }
 
-const logger = new Logger('Bootstrap');
+let cachedApp: NestApp | null = null;
 
 async function bootstrapServer(): Promise<NestApp> {
+  if (cachedApp) {
+    return cachedApp;
+  }
   try {
     const app = await NestFactory.create<NestFastifyApplication>(
       AppModule,
       new FastifyAdapter(),
     );
     const instance = app.getHttpAdapter().getInstance() as FastifyInstance;
-
-    const configService = app.get(ConfigService);
-
-    app.register(multipart, {
-      addToBody: true,
-    });
-
-    app.register(fastifyStatic, {
-      root: '/Users/nick/Contracting/api/dist/swagger-ui',
-      prefix: '/static-docs/',
-    });
-
-    const config = new DocumentBuilder()
-      .setTitle('RAES Mobile API')
-      .setDescription(
-        'A NestJS Fastify API deployed with Serverless for the RAES Mobile App.',
-      )
-      .setVersion('1.0')
-      .build();
-
-    const document = SwaggerModule.createDocument(app, config);
-
-    global.swaggerDocument = document;
-
-    app.useGlobalFilters(new HttpExceptionFilter());
-
-    const corsOrigins = configService.get('CORS_ORIGIN')?.split(','); // Assuming comma separation
-    if (corsOrigins?.length) {
-      app.enableCors({
-        origin: (origin, callback) => {
-          if (corsOrigins?.indexOf(origin) !== -1 || !origin) {
-            callback(null, true);
-          } else {
-            callback(new Error('Not allowed by CORS'));
-          }
-        },
-        allowedHeaders: 'Content-Type, Accept',
-        methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    app.useGlobalGuards(new JwtAuthGuard(new Reflector()));
+    try {
+      // @ts-expect-error bad types
+      app.register(multipart, {
+        addToBody: true,
       });
+    } catch (e) {
+      console.log('Error in multipart', e);
+    }
+    try {
+      const root = path.resolve(__dirname, '/api/dist/swagger-ui');
+      // @ts-expect-error bad types
+      app.register(fastifyStatic, {
+        root: root,
+        prefix: '/static-docs/',
+      });
+    } catch (e) {
+      console.log('Error in fastifyStatic', e);
     }
 
-    app.useLogger(new Logger());
+    let config;
+    try {
+      config = new DocumentBuilder()
+        .setTitle('RAES Mobile API')
+        .setDescription(
+          'A NestJS Fastify API deployed with Serverless for the RAES Mobile App.',
+        )
+        .setVersion('1.0')
+        .build();
+    } catch (e) {
+      console.log('Error in DocumentBuilder', e);
+    }
 
-    app.useGlobalPipes(
-      new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: false,
-        transform: true,
-      }),
-      new PaginationPipe(),
-    );
+    let document;
+    try {
+      document = SwaggerModule.createDocument(app, config);
+    } catch (e) {
+      console.log('Error in SwaggerModule', e);
+    }
+    try {
+      global.swaggerDocument = document;
+    } catch (e) {
+      console.log('Error in global.swaggerDocument', e);
+    }
+    // app.useGlobalFilters(new HttpExceptionFilter());
+    try {
+      console.log('CORS_ORIGIN', process.env.CORS_ORIGIN);
+      const allowedOrigins = process.env.CORS_ORIGIN
+        ? process.env.CORS_ORIGIN.split(',')
+        : ['*'];
 
-    console.log('About to init the app');
-    await app.init();
-    console.log('App successfully inited');
-    return { app, instance };
+      app.enableCors({
+        origin: allowedOrigins,
+        allowedHeaders: 'Content-Type, Accept, x-database, Authorization',
+        // allowedHeaders: '*',
+        methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+      });
+    } catch (e) {
+      console.log('Error setting CORS', e);
+    }
+    try {
+      app.useLogger(new Logger());
+    } catch (e) {
+      console.log('Coul not register Logger');
+    }
+    try {
+      app.useGlobalPipes(
+        new ValidationPipe({
+          whitelist: true,
+          forbidNonWhitelisted: true,
+          transform: true,
+        }),
+        new PaginationPipe(),
+      );
+    } catch (e) {
+      console.log('Error setting up Global validation pipes:', e);
+    }
+    try {
+      await app.init();
+    } catch (e) {
+      // @ts-expect-error that fucking stupid
+      throw new InternalServerError(
+        `Application faile to initialized: ${e.message}`,
+      );
+    }
+
+    cachedApp = { app, instance };
+
+    return cachedApp;
   } catch (error) {
-    logger.error('Failed to bootstrap the application', error);
     throw error; // Rethrow the error to ensure Lambda execution fails and the error is logged in CloudWatch
   }
 }
 
 const handler = async (event, context) => {
   try {
+    context.callbackWaitsForEmptyEventLoop = false;
     const { instance } = await bootstrapServer();
-    console.log('In handler, instance instantiated');
-    const ret = await proxy(instance, event, context);
-    console.log('In handler, proxy instantiated');
+
+    const ret = await proxy(instance, event, context, ['callback']);
+
     return ret;
   } catch (error) {
-    logger.error('Error in Lambda handler', error);
     return {
       statusCode: 500,
       body: JSON.stringify({ message: 'Internal Server Error' }),

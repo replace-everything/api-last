@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
+    "module": "CommonJS",
+    "esModuleInterop": true,
     "declaration": true,
     "noImplicitAny": false,
     "removeComments": true,
@@ -26,10 +27,15 @@
   "include": [
     "src/**/*",
     "types/**/*.d.ts",
-    "webpack.config.js"
+    "webpack.config.js",
+    "api-gateway/**/*",
+    "clients-microservice/**/*", "src/users/users.service.ts",
   ], // Include only .ts files in the src directory
   "exclude": [
     "node_modules",
-    "dist"
+    "dist",
+    "micro",
+    ".serverless",
+    ".github",
   ],
 }

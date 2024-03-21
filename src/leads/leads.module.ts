@@ -1,21 +1,15 @@
+// leads.module.ts (or the module where Lead entity should be registered)
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { UsersModule } from '../users/users.module';
 import { Lead } from './entities/lead.entity';
-import { LeadsController } from './leads.controller';
 import { LeadsService } from './leads.service';
-import { LeadRepository } from './leads.repository';
-import { UserRepository } from '../users/users.repository';
+import { LeadsController } from './leads.controller';
 import { DatabaseModule } from '../database.module';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Lead, UserRepository]),
-    UsersModule,
-    DatabaseModule,
-  ],
-  providers: [LeadsService, LeadRepository, UserRepository],
+  imports: [TypeOrmModule.forFeature([Lead]), DatabaseModule], // Correctly register the Lead entity
+  providers: [LeadsService],
   controllers: [LeadsController],
-  exports: [TypeOrmModule, LeadRepository, LeadsService],
+  exports: [TypeOrmModule], // Export TypeOrmModule if you plan to use the repository outside this module
 })
 export class LeadsModule {}

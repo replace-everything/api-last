@@ -1,0 +1,255 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2759
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 // auth.controller.ts\
+import \{ Controller, Post, Body, UnauthorizedException \} from '@nestjs/common';\
+import \{ AuthService \} from './auth.service';\
+import \{ UsersService \} from '../users/users.service';\
+import \{ User \} from '../users/entities/user.entity';\
+import \{ Public \} from './public.decorator';\
+\
+@Controller('auth')\
+export class AuthController \{\
+  constructor(\
+    private readonly authService: AuthService,\
+    private readonly usersService: UsersService,\
+  ) \{\}\
+\
+  @Public()\
+  @Post('/login')\
+  async login(\
+    @Body('username') username: string,\
+    @Body('password') password: string,\
+    @Body('company') company,\
+    @Body('uid') uid?: string,\
+  ) \{\
+    console.log('IN LOGIN: ', username, password, company, uid);\
+    return await this.authService.login(username, password, company, uid);\
+  \}\
+\
+  @Public()\
+  @Post('/register')\
+  async register(\
+    @Body() createUserDto: Partial<User>,\
+    @Body('company') company,\
+  ) \{\
+    return await this.authService.createUser(createUserDto, company);\
+  \}\
+\
+  @Public()\
+  @Post('/reset-password')\
+  async resetPassword(\
+    @Body('username') username: string,\
+    @Body('password') password: string,\
+    @Body('company') company,\
+  ) \{\
+    const user = await this.authService.findUserByUsername(username, company);\
+\
+    if (!user) \{\
+      throw new UnauthorizedException('Invalid credentials');\
+    \}\
+\
+    const hashedPassword = this.authService.hashPassword(password);\
+    await this.usersService.updateUser(\
+      user.uid,\
+      \{ upass: hashedPassword \},\
+      company,\
+    );\
+\
+    return \{ message: 'Password reset successful' \};\
+  \}\
+\
+  @Public()\
+  @Post('/refresh-token')\
+  async refreshToken(\
+    @Body('refreshToken') refreshToken: string,\
+    @Body('company') company,\
+  ) \{\
+    return await this.authService.refreshToken(refreshToken, company);\
+  \}\
+\}\
+// jwt.strategy.ts\
+import \{ ExtractJwt, Strategy \} from 'passport-jwt';\
+import \{ PassportStrategy \} from '@nestjs/passport';\
+import \{ Global, Injectable \} from '@nestjs/common';\
+import \{ Request \} from 'express';\
+\
+@Global()\
+@Injectable()\
+export class JwtStrategy extends PassportStrategy(Strategy) \{\
+  constructor() \{\
+    super(\{\
+      jwtFromRequest: ExtractJwt.fromExtractors([\
+        (request: Request) => \{\
+          const authHeader = (request.headers.authorization ||\
+            request.headers.Authorization) as string;\
+          if (authHeader && authHeader.startsWith('Bearer ')) \{\
+            return authHeader.slice(7, authHeader.length);\
+          \}\
+          return null;\
+        \},\
+      ]),\
+      ignoreExpiration: false,\
+      secretOrKey: process.env.SECRET_KEY,\
+    \});\
+  \}\
+\
+  async validate(payload: any) \{\
+    console.log('VALIDATE STRATEGY', payload);\
+    return \{\
+      userId: payload.sub,\
+      username: payload.username,\
+      schema: payload.dbSchema,\
+    \};\
+  \}\
+\}\
+// src/main.ts\
+import \{ FastifyInstance \} from 'fastify';\
+import \{ ValidationPipe, Logger \} from '@nestjs/common';\
+import \{ NestFactory, Reflector \} from '@nestjs/core';\
+import \{\
+  FastifyAdapter,\
+  NestFastifyApplication,\
+\} from '@nestjs/platform-fastify';\
+import \{ AppModule \} from './app.module';\
+import \{ proxy \} from 'aws-serverless-fastify';\
+import \{ PaginationPipe \} from './common/pipes/pagination.pipe';\
+import multipart from '@fastify/multipart';\
+import \{ DocumentBuilder, SwaggerModule \} from '@nestjs/swagger';\
+import fastifyStatic from '@fastify/static';\
+import 'reflect-metadata';\
+import \{ JwtAuthGuard \} from './common/guards/jwt-auth.guard';\
+import path from 'path';\
+import \{ InternalServerError \} from '@aws-sdk/client-dynamodb';\
+\
+export interface NestApp \{\
+  app: NestFastifyApplication;\
+  instance: FastifyInstance;\
+\}\
+\
+let cachedApp: NestApp | null = null;\
+\
+async function bootstrapServer(): Promise<NestApp> \{\
+  if (cachedApp) \{\
+    return cachedApp;\
+  \}\
+  try \{\
+    const app = await NestFactory.create<NestFastifyApplication>(\
+      AppModule,\
+      new FastifyAdapter(),\
+    );\
+    const instance = app.getHttpAdapter().getInstance() as FastifyInstance;\
+    app.useGlobalGuards(new JwtAuthGuard(new Reflector()));\
+    try \{\
+      // @ts-expect-error bad types\
+      app.register(multipart, \{\
+        addToBody: true,\
+      \});\
+    \} catch (e) \{\
+      console.log("Error in multipart", e)\
+    \}\
+    try \{\
+      const root = path.resolve(__dirname, '/api/dist/swagger-ui');\
+      // @ts-expect-error bad types\
+      app.register(fastifyStatic, \{\
+        root: root,\
+        prefix: '/static-docs/',\
+      \});\
+    \} catch (e) \{\
+      console.log("Error in fastifyStatic", e)\
+    \}\
+\
+    let config;\
+    try \{\
+      config = new DocumentBuilder()\
+        .setTitle('RAES Mobile API')\
+        .setDescription(\
+          'A NestJS Fastify API deployed with Serverless for the RAES Mobile App.',\
+        )\
+        .setVersion('1.0')\
+        .build();\
+    \} catch (e) \{\
+      console.log("Error in DocumentBuilder", e)\
+    \}\
+\
+    let document;\
+    try \{\
+      document = SwaggerModule.createDocument(app, config);\
+    \} catch (e) \{\
+      console.log("Error in SwaggerModule", e)\
+    \}\
+    try \{\
+    global.swaggerDocument = document;\
+    \} catch (e) \{\
+      console.log("Error in global.swaggerDocument", e)\
+    \}\
+    // app.useGlobalFilters(new HttpExceptionFilter());\
+    try \{\
+      console.log('CORS_ORIGIN', process.env.CORS_ORIGIN);\
+      const allowedOrigins = process.env.CORS_ORIGIN\
+        ? process.env.CORS_ORIGIN.split(',')\
+        : ['*'];\
+\
+        app.enableCors(\{\
+          origin: allowedOrigins,\
+          allowedHeaders: 'Content-Type, Accept, x-database, Authorization',\
+          // allowedHeaders: '*',\
+          methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',\
+        \});\
+      \} catch (e) \{\
+        console.log("Error setting CORS", e);\
+      \}\
+    try \{\
+      app.useLogger(new Logger());\
+    \} catch (e) \{\
+      console.log("Coul not register Logger")\
+    \}\
+    try \{\
+      app.useGlobalPipes(\
+        new ValidationPipe(\{\
+          whitelist: true,\
+          forbidNonWhitelisted: true,\
+          transform: true,\
+        \}),\
+        new PaginationPipe(),\
+      );\
+    \} catch (e) \{\
+      console.log("Error setting up Global validation pipes:", e)\
+    \}\
+    try \{\
+      await app.init();\
+    \} catch (e) \{\
+\
+      // @ts-expect-error that fucking stupid\
+      throw new InternalServerError(`Application faile to initialized: $\{e.message\}`)\
+    \}\
+\
+    cachedApp = \{ app, instance \};\
+\
+    return cachedApp;\
+  \} catch (error) \{\
+    throw error; // Rethrow the error to ensure Lambda execution fails and the error is logged in CloudWatch\
+  \}\
+\}\
+\
+const handler = async (event, context) => \{\
+  try \{\
+    context.callbackWaitsForEmptyEventLoop = false;\
+    const \{ instance \} = await bootstrapServer();\
+    \
+    const ret = await proxy(instance, event, context, ['callback']);\
+    \
+    return ret;\
+  \} catch (error) \{\
+    return \{\
+      statusCode: 500,\
+      body: JSON.stringify(\{ message: 'Internal Server Error' \}),\
+    \};\
+  \}\
+\};\
+\
+export \{ bootstrapServer, handler \};}

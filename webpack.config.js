@@ -13,6 +13,54 @@ module.exports = (_, context) => {
           from: 'node_modules/swagger-ui-dist',
           to: 'swagger-ui',
         },
+        {
+          from: 'src/clients/clients.module.ts',
+          to: 'modules/clients.modules.ts',
+        },
+        {
+          from: 'src/users/users.module.ts',
+          to: 'modules/users.modules.ts',
+        },
+        {
+          from: 'src/tasks/tasks.controller.ts',
+          to: 'modules/tasks.controller.ts',
+        },
+        {
+          from: 'src/photos/photos.module.ts',
+          to: 'modules/photos.modules.ts',
+        },
+        {
+          from: 'src/leads/leads.module.ts',
+          to: 'modules/leads.modules.ts',
+        },
+        {
+          from: 'src/lead-photos/lead-photos.module.ts',
+          to: 'modules/lead-photos.modules.ts',
+        },
+        {
+          from: 'src/invoices/invoices.module.ts',
+          to: 'modules/invoices.modules.ts',
+        },
+        {
+          from: 'src/events/events.module.ts',
+          to: 'modules/events.modules.ts',
+        },
+        {
+          from: 'src/contingencies/contingencies.module.ts',
+          to: 'modules/contingencies.modules.ts',
+        },
+        {
+          from: 'src/companies/companies.module.ts',
+          to: 'modules/companies.modules.ts',
+        },
+        {
+          from: 'src/clients/clients.module.ts',
+          to: 'modules/clients.modules.ts',
+        },
+        {
+          from: 'src/buildings/buildings.module.ts',
+          to: 'modules/buildings.modules.ts',
+        },
       ],
     }),
   ];
@@ -32,6 +80,7 @@ module.exports = (_, context) => {
       : {
           photoUploader: './src/photo-uploader.ts',
           bundle: './src/main.ts',
+          'package.json': './package.json',
         };
 
   return {

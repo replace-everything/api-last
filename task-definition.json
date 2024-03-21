@@ -1,0 +1,125 @@
+{
+  "family": "nest-fastify-app",
+  "networkMode": "awsvpc",
+  "executionRoleArn": "arn:aws:iam::712114882498:role/ECSTaskExecution",
+  "containerDefinitions": [
+    {
+      "name": "raes-mobile-api",
+      "image": "712114882498.dkr.ecr.us-east-1.amazonaws.com/raes:local",
+      "portMappings": [
+        {
+          "containerPort": 3000,
+          "hostPort": 3000
+        }
+      ],
+      "secrets": [
+        {
+          "name": "CORS_ORIGIN",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:CORS_ORIGIN::"
+        },
+        {
+          "name": "BUCKET_NAME",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:BUCKET_NAME::"
+        },
+        {
+          "name": "DB_CREDENTIALS_ARN",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:DB_CREDENTIALS_ARN::"
+        },
+        {
+          "name": "NODE_ENV",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:NODE_ENV::"
+        },
+        {
+          "name": "SECRET_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:SECRET_KEY::"
+        },
+        {
+          "name": "DYNAMODB_SESSION_TABLE_NAME",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:DYNAMODB_SESSION_TABLE_NAME::"
+        },
+        {
+          "name": "DYNAMODB_USERID_TABLE_NAME",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:DYNAMODB_USERID_TABLE_NAME::"
+        },
+        {
+          "name": "username",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:username::"
+        },
+        {
+          "name": "password",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:password::"
+        },
+        {
+          "name": "host",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:host::"
+        },
+        {
+          "name": "database",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:database::"
+        },
+        {
+          "name": "port",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:port::"
+        },
+        {
+          "name": "engine",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:engine::"
+        },
+        {
+          "name": "PKCE_CLIENT_ID",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:PKCE_CLIENT_ID::"
+        },
+        {
+          "name": "PKCE_CLIENT_SECRET",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:PKCE_CLIENT_SECRET::"
+        },
+        {
+          "name": "PKCE_AUTHORIZATION_URL",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:PKCE_AUTHORIZATION_URL::"
+        },
+        {
+          "name": "PKCE_TOKEN_URL",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:PKCE_TOKEN_URL::"
+        },
+        {
+          "name": "PKCE_CALLBACK_URL",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:PKCE_CALLBACK_URL::"
+        },
+        {
+          "name": "PKCE_SCOPE",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:712114882498:secret:db-credentials-local-NdBbvq:PKCE_SCOPE::"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/nest-fastify-app",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ],
+  "requiresCompatibilities": [
+    "EC2"
+  ],
+  "cpu": "256",
+  "memory": "512",
+  "networkConfiguration": {
+    "awsvpcConfiguration": {
+      "subnets": [
+        "subnet-0af6ec35e3762ff4e",
+        "subnet-0220b3a1b606454f7",
+        "subnet-0583a77dce7f538d7",
+        "subnet-0c78c6fb33cd18c32",
+        "subnet-04b745d52ab07885b",
+        "subnet-0de008bfd82f44f4d"
+      ],
+      "securityGroups": [
+        "sg-01a3240ea5b7293f2",
+        "sg-06529264c65f469e1"
+      ],
+      "assignPublicIp": "ENABLED"
+    }
+  }
+}

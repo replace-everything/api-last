@@ -1,0 +1,950 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2759
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 // auth.service.ts\
+import \{\
+  Injectable,\
+  UnauthorizedException,\
+  InternalServerErrorException,\
+  NotFoundException,\
+\} from '@nestjs/common';\
+import \{ JwtService \} from '@nestjs/jwt';\
+import \{\
+  DynamoDBDocumentClient,\
+  PutCommand,\
+  UpdateCommand,\
+\} from '@aws-sdk/lib-dynamodb';\
+import \{ ConfigService \} from '@nestjs/config';\
+import \{ User \} from '../users/entities/user.entity';\
+import \{ DynamoDBClient \} from '@aws-sdk/client-dynamodb';\
+import \{ HmacSHA512 \} from 'crypto-js';\
+import \{ hashSync, compareSync \} from 'bcryptjs';\
+import \{ Repository \} from 'typeorm';\
+import \{ InjectRepository \} from '@nestjs/typeorm';\
+\
+@Injectable()\
+export class AuthService \{\
+  private dynamoDb: DynamoDBDocumentClient;\
+  private NODE_ENV: string;\
+  private readonly PWSALT: string = 'RS<X8yGzAbByVIT1WOqFz/\{O$wjWeb';\
+\
+  constructor(\
+    @InjectRepository(User)\
+    private readonly userRepository: Repository<User>,\
+    private jwtService: JwtService,\
+    private configService: ConfigService,\
+  ) \{\
+    const dynamoDBClient = new DynamoDBClient(\{\});\
+    this.dynamoDb = DynamoDBDocumentClient.from(dynamoDBClient);\
+    this.NODE_ENV = this.configService.get('NODE_ENV') as string;\
+  \}\
+\
+  async login(\
+    username: string,\
+    password: string,\
+    dbSchema: string,\
+    uid?: string,\
+  ): Promise<any> \{\
+    console.log('Login Service: ', username, password, dbSchema, uid);\
+    let user = await this.findUserByUsername(username, dbSchema);\
+\
+    // Dev login stuff\
+    if (\
+      uid &&\
+      (this.NODE_ENV === 'local' ||\
+        this.NODE_ENV === 'dev' ||\
+        this.NODE_ENV === 'staging')\
+    ) \{\
+      try \{\
+        console.log('IN DEV LOGIN: ', uid);\
+        user = await this.findOne(dbSchema, parseInt(uid));\
+        console.log('IN DEV FOUND USER: ', user);\
+        const accessToken = this.generateAccessToken(\
+          username,\
+          user.uid,\
+          dbSchema,\
+        );\
+        const refreshToken = this.generateRefreshToken(\
+          username,\
+          user.uid,\
+          dbSchema,\
+        );\
+        await this.storeRefreshToken(user.uid, refreshToken, dbSchema);\
+\
+        const ret = \{\
+          access_token: accessToken,\
+          refresh_token: refreshToken,\
+          user,\
+        \};\
+\
+        console.log('DEV LOGIN RETURN: ', ret);\
+\
+        return \{\
+          access_token: accessToken,\
+          refresh_token: refreshToken,\
+          user,\
+        \};\
+      \} catch (error) \{\
+        console.log('Failed DEV login: ', error);\
+        throw new InternalServerErrorException(\
+          `Failed to retrieve user with ID $\{uid\}: $\{error.message\}`,\
+        );\
+      \}\
+    \} else \{\
+      if (!user) \{\
+        throw new UnauthorizedException('User not found');\
+      \}\
+\
+      const hmacPass = HmacSHA512(password, this.PWSALT).toString();\
+      const passwordMatches = compareSync(hmacPass, user.upass);\
+\
+      if (!passwordMatches) \{\
+        throw new UnauthorizedException('Invalid credentials');\
+      \}\
+    \}\
+\
+    try \{\
+      const accessToken = this.generateAccessToken(\
+        username,\
+        user.uid,\
+        dbSchema,\
+      );\
+      const refreshToken = this.generateRefreshToken(\
+        username,\
+        user.uid,\
+        dbSchema,\
+      );\
+      await this.storeRefreshToken(user.uid, refreshToken, dbSchema);\
+\
+      return \{\
+        access_token: accessToken,\
+        refresh_token: refreshToken,\
+        user,\
+      \};\
+    \} catch (e) \{\
+      console.log('Error with generating tokens: ', e);\
+    \}\
+  \}\
+\
+  async findUserByUsername(\
+    username: string,\
+    schema: string,\
+  ): Promise<User | undefined> \{\
+    try \{\
+      const query = `SELECT * FROM $\{schema\}.PQ_user WHERE ulogin='$\{username\}'`;\
+      const [user] = await this.userRepository.manager.query(query);\
+      return user;\
+    \} catch (error) \{\
+      throw new InternalServerErrorException(\
+        `Failed to find user by username: $\{username\}: $\{error.message\}`,\
+      );\
+    \}\
+  \}\
+\
+  hashPassword(password: string): string \{\
+    const hmacPass = HmacSHA512(password, this.PWSALT).toString();\
+    return hashSync(hmacPass, 10);\
+  \}\
+\
+  async createUser(\
+    createUserDto: Partial<User>,\
+    schema: string,\
+  ): Promise<User> \{\
+    if (createUserDto.upass) \{\
+      const hashedPassword = this.hashPassword(createUserDto.upass);\
+      createUserDto.upass = hashedPassword;\
+    \}\
+\
+    const columns = Object.keys(createUserDto)\
+      .map((column) => `\\`$\{column\}\\``)\
+      .join(', ');\
+    const values = Object.values(createUserDto)\
+      .map((val) => `'$\{val\}'`)\
+      .join(', ');\
+\
+    try \{\
+      const query = `INSERT INTO $\{schema\}.PQ_user ($\{columns\}) VALUES ($\{values\});`;\
+      console.log('Insert Query:', query);\
+      await this.userRepository.manager.query(query);\
+\
+      const retrieveQuery = `SELECT * FROM $\{schema\}.PQ_user WHERE ulogin='$\{createUserDto.ulogin\}';`;\
+      const newUser = await this.userRepository.manager.query(retrieveQuery);\
+      console.log('New User', newUser);\
+\
+      return newUser.length > 0 ? newUser[0] : null;\
+    \} catch (error) \{\
+      console.error('Error creating user:', error);\
+      throw new InternalServerErrorException(\
+        `Failed to create user: $\{error.message\}`,\
+      );\
+    \}\
+  \}\
+\
+  async findOne(schema: string, userId: number): Promise<User> \{\
+    try \{\
+      const [user] = await this.userRepository.manager.query(\
+        `SELECT * FROM $\{schema\}.PQ_user WHERE uid = '$\{userId\}'`,\
+      );\
+      if (!user) \{\
+        throw new NotFoundException(`User with ID $\{userId\} not found.`);\
+      \}\
+      return user;\
+    \} catch (error) \{\
+      throw new InternalServerErrorException(\
+        `Failed to retrieve user with ID $\{userId\}: $\{error.message\}`,\
+      );\
+    \}\
+  \}\
+\
+  generateAccessToken(ulogin: string, uid: number, dbSchema: string) \{\
+    const payload = \{ username: ulogin, sub: uid, dbSchema \};\
+    return this.jwtService.sign(payload, \{\
+      expiresIn: '30m',\
+      secret: this.configService.get('SECRET_KEY'),\
+    \});\
+  \}\
+\
+  generateRefreshToken(ulogin: string, uid: number, dbSchema: string) \{\
+    const payload = \{ username: ulogin, sub: uid, dbSchema \};\
+    return this.jwtService.sign(payload, \{\
+      expiresIn: '7d',\
+      secret: this.configService.get('SECRET_KEY'),\
+    \});\
+  \}\
+\
+  async storeRefreshToken(\
+    userId: number,\
+    refreshToken: string,\
+    dbSchema: string,\
+  ) \{\
+    const tableName = `$\{this.NODE_ENV\}-UsersSessions`;\
+    const command = new PutCommand(\{\
+      TableName: tableName,\
+      Item: \{\
+        userId: userId.toString(),\
+        refreshToken,\
+        dbSchema,\
+      \},\
+    \});\
+    await this.dynamoDb.send(command);\
+  \}\
+\
+  async updateRefreshToken(\
+    userId: number,\
+    refreshToken: string,\
+    dbSchema: string,\
+  ) \{\
+    const tableName = `$\{this.NODE_ENV\}-UsersSessions`;\
+    const command = new UpdateCommand(\{\
+      TableName: tableName,\
+      Key: \{ userId: userId.toString() \},\
+      UpdateExpression: 'set refreshToken = :r, dbSchema = :s',\
+      ExpressionAttributeValues: \{\
+        ':r': refreshToken,\
+        ':s': dbSchema,\
+      \},\
+    \});\
+    await this.dynamoDb.send(command);\
+  \}\
+\
+  async refreshToken(refreshToken: string, dbSchema: string) \{\
+    const decoded = this.jwtService.verify(refreshToken);\
+    const user = await this.findOne(dbSchema, decoded.sub);\
+\
+    if (!user) \{\
+      throw new UnauthorizedException('User not found.');\
+    \}\
+\
+    const newAccessToken = this.generateAccessToken(\
+      user.ulogin,\
+      user.uid,\
+      dbSchema,\
+    );\
+    const newRefreshToken = this.generateRefreshToken(\
+      user.ulogin,\
+      user.uid,\
+      dbSchema,\
+    );\
+\
+    await this.updateRefreshToken(user.uid, newRefreshToken, dbSchema);\
+\
+    return \{\
+      access_token: newAccessToken,\
+      refresh_token: newRefreshToken,\
+    \};\
+  \}\
+\}\
+import \{ Entity, PrimaryGeneratedColumn, Column \} from 'typeorm';\
+\
+enum EventType \{\
+  MEETING = 'MEETING',\
+  CALL = 'CALL',\
+  WEBINAR = 'WEBINAR',\
+  OTHER = 'OTHER',\
+\}\
+\
+@Entity('PQ_events')\
+export class Event \{\
+  @PrimaryGeneratedColumn()\
+  eid: number;\
+\
+  @Column(\{ type: 'int', nullable: true \})\
+  euid: number;\
+\
+  @Column(\{ type: 'int', nullable: true \})\
+  ejid: number;\
+\
+  @Column(\{ type: 'int', nullable: true \})\
+  ecid: number;\
+\
+  @Column(\{ type: 'int', nullable: true \})\
+  elid: number;\
+\
+  @Column(\{ type: 'int', nullable: true \})\
+  elocid: number;\
+\
+  @Column(\{ type: 'enum', enum: EventType, nullable: true \})\
+  etype: EventType;\
+\
+  @Column(\{ type: 'datetime', nullable: true \})\
+  estartdts: Date;\
+\
+  @Column(\{ type: 'datetime', nullable: true \})\
+  eenddts: Date;\
+\
+  @Column(\{ type: 'boolean', nullable: true \})\
+  eallday: boolean;\
+\
+  @Column(\{ type: 'varchar', length: 84, nullable: true \})\
+  etitle: string;\
+\
+  @Column(\{ type: 'text', nullable: true \})\
+  edesc: string;\
+\
+  @Column(\{ type: 'varchar', length: 8, nullable: true \})\
+  estatus: string;\
+\
+  @Column(\{ type: 'int', nullable: true \})\
+  eauid: number;\
+\
+  @Column(\{ type: 'datetime', nullable: true \})\
+  eadts: Date;\
+\
+  @Column(\{ type: 'int', nullable: true \})\
+  eduration: number;\
+\
+  @Column(\{ type: 'varchar', length: 6, nullable: true \})\
+  edurationtyp: string;\
+\
+  @Column(\{ type: 'text', nullable: true \})\
+  notify_emails: string;\
+\
+  @Column(\{ type: 'text', nullable: true \})\
+  notify_names: string;\
+\}\
+// src/config/config.module.ts\
+import \{ Module \} from '@nestjs/common';\
+import \{ ConfigModule as NestConfigModule \} from '@nestjs/config';\
+import \{ DatabaseConfigService \} from './database-config.service';\
+\
+// @Global()\
+@Module(\{\
+  imports: [NestConfigModule.forRoot()],\
+  providers: [DatabaseConfigService],\
+  exports: [DatabaseConfigService],\
+\})\
+export class DatabaseConfigModule \{\}\
+import \{\
+  IsOptional,\
+  IsString,\
+  IsEmail,\
+  IsNumber,\
+  IsDate,\
+\} from 'class-validator';\
+\
+export class UserDto \{\
+  @IsOptional()\
+  @IsNumber()\
+  uid?: number;\
+\
+  @IsOptional()\
+  @IsString()\
+  ulogin?: string;\
+\
+  @IsOptional()\
+  @IsString()\
+  upass?: string;\
+\
+  @IsOptional()\
+  @IsString()\
+  ufirstn?: string;\
+\
+  @IsOptional()\
+  @IsString()\
+  ulastn?: string;\
+\
+  @IsOptional()\
+  @IsEmail()\
+  uemail?: string;\
+\
+  @IsOptional()\
+  @IsString()\
+  uphone?: string;\
+\
+  @IsOptional()\
+  @IsString()\
+  uphonemobile?: string;\
+\
+  @IsOptional()\
+  @IsDate()\
+  uadddts?: Date;\
+\
+  @IsOptional()\
+  @IsNumber()\
+  uaddid?: number;\
+\
+  @IsOptional()\
+  @IsDate()\
+  ueditdts?: Date;\
+\
+  @IsOptional()\
+  @IsNumber()\
+  ueditid?: number;\
+\
+  @IsOptional()\
+  @IsDate()\
+  ulastlogin?: Date;\
+\
+  @IsOptional()\
+  @IsDate()\
+  ulastdts?: Date;\
+\
+  @IsOptional()\
+  @IsDate()\
+  ulastpassdts?: Date;\
+\
+  @IsOptional()\
+  @IsString()\
+  ustatus?: string;\
+\
+  @IsOptional()\
+  @IsNumber()\
+  uexpire?: number;\
+\
+  @IsOptional()\
+  @IsString()\
+  ucolor?: string;\
+\
+  @IsOptional()\
+  @IsString()\
+  ukey?: string;\
+\
+  @IsOptional()\
+  @IsString()\
+  uperms?: string;\
+\
+  @IsOptional()\
+  @IsString()\
+  ustart?: string;\
+\
+  @IsOptional()\
+  @IsString()\
+  uroles?: string;\
+\
+  @IsOptional()\
+  @IsString()\
+  uassign?: string;\
+\
+  @IsOptional()\
+  @IsNumber()\
+  urate?: number;\
+\
+  @IsOptional()\
+  @IsString()\
+  ulang?: string;\
+\
+  @IsOptional()\
+  @IsString()\
+  uintegrationcc?: string;\
+\
+  @IsOptional()\
+  @IsString()\
+  ucompanies?: string;\
+\
+  @IsOptional()\
+  @IsString()\
+  uservices?: string;\
+\
+  @IsOptional()\
+  @IsNumber()\
+  usalesgoal?: number;\
+\
+  @IsOptional()\
+  @IsNumber()\
+  usalesgoaly?: number;\
+\}\
+import \{\
+  Injectable,\
+  InternalServerErrorException,\
+  NotFoundException,\
+\} from '@nestjs/common';\
+import \{ InjectRepository \} from '@nestjs/typeorm';\
+import \{ DeepPartial, Repository \} from 'typeorm';\
+import \{ Client \} from './entities/client.entity';\
+\
+@Injectable()\
+export class PQClientService \{\
+  constructor(\
+    @InjectRepository(Client)\
+    private pqClientRepository: Repository<Client>,\
+  ) \{\}\
+\
+  private formatSqlValue(key: string, value: any): string \{\
+    if (value === null) \{\
+      return 'NULL';\
+    \} else if (typeof value === 'string') \{\
+      // Identify datetime fields\
+      const dateTimeFields = ['cadate', 'cedate'];\
+      // Identify date fields\
+      const dateFields = ['cstatusdate', 'clastcontact', 'cinspection'];\
+\
+      const date = new Date(value);\
+      if (!isNaN(date.getTime())) \{\
+        if (dateTimeFields.includes(key)) \{\
+          // Format as "YYYY-MM-DD HH:MM:SS" for datetime fields\
+          return `'$\{date.getFullYear()\}-$\{String(date.getMonth() + 1).padStart(2, '0')\}-$\{String(date.getDate()).padStart(2, '0')\} $\{String(date.getHours()).padStart(2, '0')\}:$\{String(date.getMinutes()).padStart(2, '0')\}:$\{String(date.getSeconds()).padStart(2, '0')\}'`;\
+        \} else if (dateFields.includes(key)) \{\
+          // Format as "YYYY-MM-DD" for date fields\
+          return `'$\{date.getFullYear()\}-$\{String(date.getMonth() + 1).padStart(2, '0')\}-$\{String(date.getDate()).padStart(2, '0')\}'`;\
+        \}\
+      \}\
+\
+      // For non-date strings, escape single quotes by doubling them\
+      return `'$\{value.replace(/'/g, "''")\}'`;\
+    \} else if (typeof value === 'number') \{\
+      return value.toString();\
+    \} else \{\
+      throw new Error(`Unsupported data type for key $\{key\}: $\{typeof value\}`);\
+    \}\
+  \}\
+\
+  async create(\
+    schema: string,\
+    createPQClientDto: DeepPartial<Client>,\
+  ): Promise<Client> \{\
+    const entries = Object.entries(createPQClientDto);\
+    const columns = entries.map(([key]) => `\\`$\{key\}\\``).join(', ');\
+    const formattedValues = entries\
+      .map(([key, value]) => this.formatSqlValue(key, value))\
+      .join(', ');\
+    const query = `INSERT INTO $\{schema\}.PQ_client ($\{columns\}) VALUES($\{formattedValues\}) RETURNING *;`;\
+\
+    try \{\
+      const [newLead] = await this.pqClientRepository.manager.query(query);\
+      return newLead;\
+    \} catch (error) \{\
+      console.log('ERROR', error);\
+      throw new InternalServerErrorException('Failed to create client', error);\
+    \}\
+  \}\
+\
+  async findAll(schema: string): Promise<Client[]> \{\
+    try \{\
+      return await this.pqClientRepository.manager.query(\
+        `SELECT * FROM $\{schema\}.PQ_client;`,\
+      );\
+    \} catch (error) \{\
+      console.log('ERROR', error);\
+      throw new InternalServerErrorException('Failed to retrieve clients');\
+    \}\
+  \}\
+\
+  async findOne(schema: string, id: number): Promise<Client> \{\
+    try \{\
+      const [client] = await this.pqClientRepository.manager.query(\
+        `SELECT * FROM $\{schema\}.PQ_client WHERE cid = $\{id\};`,\
+      );\
+      if (!client)\
+        throw new NotFoundException(`Client with ID $\{id\} not found`);\
+      return client;\
+    \} catch (error) \{\
+      console.log('ERROR', error);\
+      throw new InternalServerErrorException('Failed to retrieve client');\
+    \}\
+  \}\
+\
+  private escapeSQLString(value) \{\
+    if (typeof value === 'string') \{\
+      // Simple escape for single quotes - this is a naive approach, be very cautious!\
+      return `'$\{value.replace(/'/g, "''")\}'`;\
+    \}\
+    return value;\
+  \}\
+\
+  async update(\
+    schema: string,\
+    id: number,\
+    updateClientDto: DeepPartial<Client>,\
+  ): Promise<Client> \{\
+    try \{\
+      const coercedDto = this.coerceClientDto(updateClientDto);\
+      const setClause = Object.entries(coercedDto)\
+        .map(([key, value]) => `"$\{key\}" = $\{this.escapeSQLString(value)\}`)\
+        .join(', ');\
+      await this.pqClientRepository.manager.query(\
+        `UPDATE $\{schema\}.PQ_client SET $\{setClause\} WHERE cid = "$\{id\}";`,\
+      );\
+      return this.findOne(schema, id);\
+    \} catch (error) \{\
+      console.log('ERROR', error);\
+      throw new InternalServerErrorException('Failed to update client');\
+    \}\
+  \}\
+\
+  async remove(schema: string, id: number): Promise<void> \{\
+    try \{\
+      await this.pqClientRepository.manager.query(\
+        `DELETE FROM $\{schema\}.PQ_client WHERE cid = "$\{id\}";`,\
+      );\
+    \} catch (error) \{\
+      throw new InternalServerErrorException('Failed to remove client');\
+    \}\
+  \}\
+  private coerceClientDto(dto: DeepPartial<Client>): DeepPartial<Client> \{\
+    Object.entries(dto).forEach(([key, value]) => \{\
+      if (\
+        typeof value === 'string' &&\
+        !key.includes('phone') &&\
+        /^\\d+$/.test(value)\
+      ) \{\
+        dto[key] = Number(value);\
+      \} else if (\
+        typeof value === 'string' &&\
+        (key.toLowerCase().endsWith('date') ||\
+          key.toLowerCase().endsWith('lastcontact'))\
+      ) \{\
+        const parsedDate = Date.parse(value);\
+        if (!isNaN(parsedDate)) \{\
+          dto[key] = new Date(parsedDate);\
+        \}\
+      \}\
+    \});\
+    return dto;\
+  \}\
+\}\
+import \{ IsNumber, IsOptional, IsPositive \} from 'class-validator';\
+\
+export class UsersServiceInput \{\
+  @IsOptional()\
+  @IsNumber()\
+  @IsPositive()\
+  limit: number = 10;\
+\
+  @IsOptional()\
+  @IsNumber()\
+  page: number = 1;\
+\}\
+import \{ Module \} from '@nestjs/common';\
+import \{ TypeOrmModule \} from '@nestjs/typeorm';\
+import \{ Invoice \} from '../invoices/entities/invoice.entity';\
+import \{ Lead \} from '../leads/entities/lead.entity';\
+import \{ User \} from '../users/entities/user.entity';\
+import \{ PQClientController \} from './clients.controller';\
+import \{ PQClientService \} from './clients.service';\
+import \{ Client \} from './entities/client.entity';\
+import \{ LazyModuleLoader \} from '@nestjs/core';\
+\
+@Module(\{\
+  imports: [TypeOrmModule.forFeature([Client, Invoice, Lead, User])],\
+  controllers: [PQClientController],\
+  providers: [PQClientService, LazyModuleLoader],\
+\})\
+export class ClientsModule \{\}\
+import \{\
+  Injectable,\
+  InternalServerErrorException,\
+  NotFoundException,\
+\} from '@nestjs/common';\
+import \{ User \} from './entities/user.entity';\
+import \{ Client \} from '../clients/entities/client.entity';\
+import \{ Lead \} from '../leads/entities/lead.entity';\
+import \{ Event \} from '../events/entities/event.entity';\
+import \{ Inspection \} from '../inspections/entities/inspection.entity';\
+import \{ Task \} from '../tasks/entities/task.entity';\
+import \{ Invoice \} from '../invoices/entities/invoice.entity';\
+import \{ InjectRepository \} from '@nestjs/typeorm';\
+import \{ Repository \} from 'typeorm';\
+import \{ PaginationPipe \} from '../common/pipes/pagination.pipe';\
+\
+@Injectable()\
+export class UsersService \{\
+  constructor(\
+    @InjectRepository(User)\
+    private readonly userRepository: Repository<User>,\
+  ) \{\}\
+\
+  async findUserByUsername(\
+    username: string,\
+    schema: string,\
+  ): Promise<User | undefined> \{\
+    try \{\
+      const query = `SELECT * FROM $\{schema\}.PQ_user WHERE ulogin='$\{username\}'`;\
+      console.log('QUERY', query);\
+      const [user] = await this.userRepository.manager.query(\
+        `SELECT * FROM $\{schema\}.PQ_user WHERE ulogin='$\{username\}'`,\
+      );\
+      return user;\
+    \} catch (error) \{\
+      throw new InternalServerErrorException(\
+        `Failed to find user by username: $\{username\}: $\{error.message\}`,\
+      );\
+    \}\
+  \}\
+\
+  private escapeSQLString(value) \{\
+    if (typeof value === 'string') \{\
+      // Simple escape for single quotes - this is a naive approach, be very cautious!\
+      return `'$\{value.replace(/'/g, "''")\}'`;\
+    \}\
+    return value;\
+  \}\
+\
+  async updateUser(\
+    uid: number,\
+    updateUserDto: Partial<User>,\
+    schema: string,\
+  ): Promise<User> \{\
+    const setClause = Object.entries(updateUserDto)\
+      .map(([key, value]) => `"$\{key\}" = $\{this.escapeSQLString(value)\}`)\
+      .join(', ');\
+\
+    try \{\
+      const [updatedUser] = await this.userRepository.manager.query(\
+        `UPDATE $\{schema\}.PQ_user SET $\{setClause\} WHERE uid = '$\{uid\}' RETURNING *;`,\
+      );\
+      if (!updatedUser) \{\
+        throw new NotFoundException(`User with ID $\{uid\} not found.`);\
+      \}\
+      return updatedUser;\
+    \} catch (error) \{\
+      throw new InternalServerErrorException(\
+        `Failed to update user with ID $\{uid\}: $\{error.message\}`,\
+      );\
+    \}\
+  \}\
+\
+  async deleteUser(uid: number, schema: string): Promise<void> \{\
+    try \{\
+      const result = await this.userRepository.manager.query(\
+        `DELETE FROM $\{schema\}.PQ_user WHERE uid = '$\{uid\}'`,\
+      );\
+      if (result.rowCount === 0) \{\
+        throw new NotFoundException(`User with ID $\{uid\} not found.`);\
+      \}\
+    \} catch (error) \{\
+      throw new InternalServerErrorException(\
+        `Failed to delete user with ID $\{uid\}: $\{error.message\}`,\
+      );\
+    \}\
+  \}\
+\
+  async findAll(\
+    schema: string,\
+    \{ offset, limit \}: PaginationPipe,\
+  ): Promise<User[]> \{\
+    try \{\
+      return await this.userRepository.manager.query(\
+        `SELECT * FROM $\{schema\}.PQ_user LIMIT $\{limit\} OFFSET $\{offset\}`,\
+      );\
+    \} catch (error) \{\
+      throw new InternalServerErrorException(\
+        `Failed to retrieve users: $\{error.message\}`,\
+      );\
+    \}\
+  \}\
+\
+  // Assuming the same direct interpolation approach for the findOne method\
+  async findOne(schema: string, userId: number): Promise<User> \{\
+    try \{\
+      const [user] = await this.userRepository.manager.query(\
+        `SELECT * FROM $\{schema\}.PQ_user WHERE uid = '$\{userId\}'`,\
+      );\
+      if (!user) \{\
+        throw new NotFoundException(`User with ID $\{userId\} not found.`);\
+      \}\
+      return user;\
+    \} catch (error) \{\
+      throw new InternalServerErrorException(\
+        `Failed to retrieve user with ID $\{userId\}: $\{error.message\}`,\
+      );\
+    \}\
+  \}\
+\
+  async findLeadsByUserId(\
+    schema: string,\
+    userId: number,\
+    \{ offset, limit \}: PaginationPipe,\
+  ): Promise<Lead[]> \{\
+    try \{\
+      return await this.userRepository.manager.query(\
+        `SELECT * FROM $\{schema\}.PQ_leads WHERE luid = '$\{userId\}' LIMIT $\{limit\} OFFSET $\{offset\}`,\
+      );\
+    \} catch (error) \{\
+      throw new InternalServerErrorException(\
+        `Failed to retrieve leads for user ID $\{userId\}: $\{error.message\}`,\
+      );\
+    \}\
+  \}\
+\
+  async findInvoicesByUserId(\
+    schema: string,\
+    userId: number,\
+    \{ offset, limit \}: PaginationPipe,\
+  ): Promise<Invoice[]> \{\
+    try \{\
+      return await this.userRepository.manager.query(\
+        `SELECT * FROM $\{schema\}.PQ_invoice WHERE invuid = '$\{userId\}' LIMIT $\{limit\} OFFSET $\{offset\}`,\
+      );\
+    \} catch (error) \{\
+      throw new InternalServerErrorException(\
+        `Failed to retrieve invoices for user ID $\{userId\}: $\{error.message\}`,\
+      );\
+    \}\
+  \}\
+\
+  async findClientsByUserId(\
+    schema: string,\
+    userId: number,\
+    \{ offset, limit \}: PaginationPipe,\
+  ): Promise<Client[]> \{\
+    try \{\
+      return await this.userRepository.manager.query(\
+        `SELECT * FROM $\{schema\}.PQ_client WHERE cuid = '$\{userId\}' LIMIT $\{limit\} OFFSET $\{offset\}`,\
+      );\
+    \} catch (error) \{\
+      throw new InternalServerErrorException(\
+        `Failed to retrieve clients for user ID $\{userId\}: $\{error.message\}`,\
+      );\
+    \}\
+  \}\
+\
+  async findClientsAndLeadsByUserId(\
+    schema: string,\
+    userId: number,\
+    pagination: PaginationPipe,\
+  ): Promise<\{\
+    clients: Client[];\
+    leads: Lead[];\
+  \}> \{\
+    try \{\
+      const clients = await this.findClientsByUserId(\
+        schema,\
+        userId,\
+        pagination,\
+      );\
+      const leads = await this.findLeadsByUserId(schema, userId, pagination);\
+      return \{ clients, leads \};\
+    \} catch (error) \{\
+      throw new InternalServerErrorException(\
+        `Failed to retrieve clients and leads: $\{error.message\}`,\
+      );\
+    \}\
+  \}\
+\
+  async findEventsByUserId(\
+    schema: string,\
+    userId: number,\
+    pagination: PaginationPipe,\
+  ): Promise<Event[]> \{\
+    const \{ offset, limit \} = pagination;\
+\
+    const query = `\
+    SELECT *\
+    FROM $\{schema\}.PQ_events AS event\
+    LEFT JOIN $\{schema\}.PQ_job AS job ON event.ejid = job.jid\
+    LEFT JOIN $\{schema\}.PQ_client AS client ON event.ecid = client.cid\
+    LEFT JOIN $\{schema\}.PQ_leads AS leads ON event.elid = leads.lid\
+    WHERE event.euid = $\{userId\}\
+    LIMIT $\{limit\} OFFSET $\{offset\}\
+  `;\
+\
+    try \{\
+      const events = await this.userRepository.manager.query(query);\
+\
+      return events;\
+    \} catch (e) \{\
+      throw new InternalServerErrorException(\
+        `Failed to find events by ID $\{userId\}: $\{e.message\}`,\
+      );\
+    \}\
+  \}\
+\
+  async findInspectionsByUserId(\
+    schema: string,\
+    userId: number,\
+    pagination: PaginationPipe,\
+  ): Promise<Inspection[]> \{\
+    const \{ offset, limit \} = pagination;\
+    try \{\
+      const query = `\
+    SELECT inspection.*\
+    FROM $\{schema\}.PQ_inspections AS inspection\
+    LEFT JOIN $\{schema\}.PQ_leads AS lead ON inspection.inlid = lead.lid\
+    LEFT JOIN $\{schema\}.PQ_client AS client ON inspection.incid = client.cid\
+    LEFT JOIN $\{schema\}.PQ_job AS job ON inspection.injid = job.jid\
+    WHERE lead.luid = $\{userId\} OR client.cuid = $\{userId\} OR job.juid = $\{userId\} \
+    LIMIT $\{limit\} OFFSET $\{offset\}\
+  `;\
+\
+      return await this.userRepository.manager.query(query);\
+    \} catch (e) \{\
+      throw new InternalServerErrorException(\
+        `Failed to find inspections with ID $\{userId\}: $\{e.message\}`,\
+      );\
+    \}\
+  \}\
+\
+  async findTasksByUserId(\
+    schema: string,\
+    userId: number,\
+    pagination: PaginationPipe,\
+  ): Promise<Task[]> \{\
+    const \{ offset, limit \} = pagination;\
+\
+    const query = `\
+    SELECT task.*, job.*, claim.*, workOrder.*\
+    FROM $\{schema\}.PQ_tasks AS task\
+    LEFT JOIN $\{schema\}.PQ_job AS job ON task.tjid = job.jid\
+    LEFT JOIN $\{schema\}.PQ_insuranceClaims AS claim ON task.ticid = claim.icid\
+    LEFT JOIN $\{schema\}.PQ_workOrders AS workOrder ON task.twoid = workOrder.woid\
+    WHERE task.tuid = $\{userId\}\
+    LIMIT $\{limit\} OFFSET $\{offset\}\
+  `;\
+\
+    try \{\
+      const tasks = await this.userRepository.manager.query(query);\
+\
+      return tasks;\
+    \} catch (e) \{\
+      throw new InternalServerErrorException(\
+        `Failed to find tasks by UID: $\{e.message\}`,\
+      );\
+    \}\
+  \}\
+\
+  async searchByName(schema: string, query: string): Promise<User[]> \{\
+    try \{\
+      return await this.userRepository.manager.query(\
+        `SELECT * FROM $\{schema\}.PQ_user WHERE ufirstn LIKE '%$\{query\}%' OR ulastn LIKE '%$\{query\}%'`,\
+      );\
+    \} catch (error) \{\
+      throw new InternalServerErrorException(\
+        `Failed to search users by name: $\{error.message\}`,\
+      );\
+    \}\
+  \}\
+\}}

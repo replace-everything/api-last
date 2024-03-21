@@ -40,7 +40,7 @@ export class Task {
   ticid: number;
 
   @Column({ type: 'date', nullable: true })
-  tdts: Date;
+  tdts: string;
 
   @Column({ type: 'date', nullable: true })
   tdeadlinedts: Date;

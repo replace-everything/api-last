@@ -1,0 +1,453 @@
+** Example 1
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { ContextIdFactory, ModuleRef } from '@nestjs/core';
+import { ILazyLoaderService } from './lazy-loader-service.interface';
+import { Lazy } from './lazy';
+import { AnyConstructor } from './types';
+
+import {
+  PARAMTYPES_METADATA,
+  PROPERTY_DEPS_METADATA,
+  SELF_DECLARED_DEPS_METADATA,
+} from '@nestjs/common/constants';
+import { DependencyIndex } from '@libs/discovery/utils';
+import { Bean } from '@libs/discovery/bean/bean';
+import { ExternalContextCreator } from '@nestjs/core/helpers/external-context-creator';
+
+@Injectable()
+export class LazyLoader implements ILazyLoaderService {
+  private contextId;
+  private readonly logger = new Logger(LazyLoader.name);
+
+  private toLazyLoad: Lazy<any>[] = [];
+  private lateBeans: any[] = [];
+
+  constructor(
+    private readonly moduleRef: ModuleRef,
+    private readonly externalContextCreator: ExternalContextCreator,
+  ) {
+    this.contextId = ContextIdFactory.create();
+  }
+
+  /***
+   * Instantiates lazy providers when module is initialized
+   */
+  async onApplicationBootstrap() {
+    for (const lazy of this.toLazyLoad) {
+      const instance = await this.create(
+        lazy.clazz,
+        ...lazy.assistedInjectionParams,
+      );
+      lazy.instantiate(instance);
+    }
+    this.toLazyLoad = [];
+  }
+  /***
+   * Creates proxy to lazy object, allows overriding of depedencies at creation level
+   * @param clazz
+   */
+  async lazyCreate<T>(clazz: AnyConstructor<T>, ...args: any[]): Promise<T> {
+    const lazy = new Lazy<T>(clazz, this.logger);
+    lazy.assistedInjectionParams = [...args];
+
+    this.toLazyLoad.push(lazy);
+    const res: unknown = new Proxy(lazy, {
+      get: (target, propKey, receiver) => {
+        //Allow only to instantiate lazy, otherwise we try to access proxy
+        if (propKey == 'instantiate') {
+          return lazy.instantiate;
+        }
+        if (propKey == 'instance') {
+          return lazy.instance;
+        }
+
+        return lazy.proxy[propKey];
+      },
+    });
+    return res as T;
+  }
+
+  resolveBean<T>(clazz: AnyConstructor<T>, ...args: any[]): T {
+    const instance = this.create(clazz, ...args);
+    const depIndex = new DependencyIndex(clazz);
+
+    try {
+      const resolved = depIndex.getArray().map((dep) =>
+        this.moduleRef.get(
+          //Either resolve injection token, or constructor dependency type passed
+          dep,
+          {
+            strict: false,
+          },
+        ),
+      );
+
+      const toInject = depIndex.remapDepsToObject(resolved);
+      const bean = new Bean(clazz, toInject, this.externalContextCreator);
+      bean.setInstance(instance);
+
+      return bean.createProxy() as T;
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  async resolve<T>(clazz: AnyConstructor<T>, ...args: any[]): Promise<T> {
+    const types: any[] = Reflect.getMetadata(PARAMTYPES_METADATA, clazz) || [];
+    const selfDeclaredDeps: any[] = Reflect.getMetadata(
+      SELF_DECLARED_DEPS_METADATA,
+      clazz,
+    );
+
+    //Check if there are no decorators used, that override provider to injection token
+    const injectionTokens =
+      selfDeclaredDeps?.reduce((acc, cv, i, arr) => {
+        acc[cv.index] = cv.param;
+        return acc;
+      }, []) || [];
+
+    //Resolved dependencies
+    const resolved = args;
+
+    let index = 0;
+    for (const dep of types) {
+      if (index < resolved.length) {
+        index++;
+        continue;
+      }
+      const res = await this.moduleRef.resolve(
+        //Either resolve injection token, or constructor dependency type passed
+        injectionTokens[index] ?? dep,
+        this.contextId,
+        {
+          strict: false,
+        },
+      );
+
+      resolved.push(res);
+      index++;
+    }
+    return new clazz(...resolved);
+  }
+
+  create<T>(clazz: AnyConstructor<T>, ...args: any[]): T {
+    const types: any[] = Reflect.getMetadata(PARAMTYPES_METADATA, clazz) || [];
+    const selfDeclaredDeps: any[] = Reflect.getMetadata(
+      SELF_DECLARED_DEPS_METADATA,
+      clazz,
+    );
+
+    //Check if there are no decorators used, that override provider to injection token
+    const injectionTokens =
+      selfDeclaredDeps?.reduce((acc, cv, i, arr) => {
+        acc[cv.index] = cv.param;
+        return acc;
+      }, []) || [];
+
+    //Resolved dependencies
+    const resolved = args;
+
+    let index = 0;
+    for (const dep of types) {
+      if (index < resolved.length) {
+        index++;
+        continue;
+      }
+      const res = this.moduleRef.get(
+        //Either resolve injection token, or constructor dependency type passed
+        injectionTokens[index] ?? dep,
+        {
+          strict: false,
+        },
+      );
+      resolved.push(res);
+      index++;
+    }
+    return new clazz(...resolved);
+  }
+
+  async instantiate<T>(clazz: AnyConstructor<T>) {
+    const res = await this.moduleRef.resolve(
+      //Either resolve injection token, or constructor dependency type passed
+      clazz,
+      this.contextId,
+      {
+        strict: false,
+      },
+    );
+
+    return res;
+  }
+}
+
+
+**Example 2:
+import { IMessagingConnection } from '@libs/messaging/interfaces/messaging-connection.interface';
+import { ILogger } from '@libs/logger/logger.interface';
+import { IMessagingConnectionFactory } from '@libs/messaging/interfaces/messaging-connection-factory.interface';
+import { MessagingConfiguration } from '@libs/messaging/messaging.configuration';
+import { MessagingDriver } from '@libs/messaging/consts';
+import { ILazyLoaderService } from '@libs/lazy-loader/lazy-loader-service.interface';
+import { KafkaConnection } from '@libs/messaging/drivers/kafka/kafka.connection';
+import { Factory, Injectable, NonInjectable } from '@libs/discovery';
+import { Traced } from '@libs/telemetry/decorators/traced.decorator';
+import {ModuleRef} from "@nestjs/core";
+
+@Injectable()
+@Traced
+export class KafkaConnectionFactory implements IMessagingConnectionFactory {
+  constructor(
+    private config: MessagingConfiguration,
+    private readonly lazy: ILazyLoaderService,
+    private readonly logger: ILogger,
+  ) {}
+
+  @Factory({ provide: 'MESSAGING_KAFKA_CONNECTIONS' })
+  create(): Promise<IMessagingConnection[]> {
+    const connections: any[] = this.config.getConnectionsConfigurations(
+      MessagingDriver.KAFKA,
+    );
+
+    const results = connections.map(async (configData: any) => {
+      return await this.lazy.resolveBean(KafkaConnection, configData);
+    });
+
+    return Promise.all(results);
+  }
+}
+
+Example 3 - lazy-loader-service-inferface.ts:
+import { AnyConstructor } from './types';
+
+export abstract class ILazyLoaderService {
+  /***
+   * Resolves dependencies after module is initialized
+   * It creates Lazy object, which is a proxy, underlying instance is created after onModuleInit is called
+   *
+   * @param clazz
+   * @param args list of dependencies to inject from outside of dependency injection system
+   */
+  abstract lazyCreate<T>(clazz: AnyConstructor<T>, ...args: any[]): Promise<T>;
+
+  /***
+   * Async resolves a bean and creates a proxy to instance
+   *
+   * @param clazz
+   * @param args
+   */
+  abstract resolveBean<T>(clazz: AnyConstructor<T>, ...args: any[]): T;
+  /***
+   * Async resolves all dependencies to certain instance of a class
+   *
+   * @param clazz
+   * @param args
+   */
+  abstract resolve<T>(clazz: AnyConstructor<T>, ...args: any[]): Promise<T>;
+
+  /***
+   * Sync resolve all dependencies to certain instance of a class
+   *
+   * @param clazz
+   * @param args
+   */
+  abstract create<T>(clazz: AnyConstructor<T>, ...args: any[]): T;
+}
+Example 3 - lazy-loader-module-inferface.ts:
+import { DynamicModule, Module } from '@nestjs/common';
+import { ILazyLoaderService } from './lazy-loader-service.interface';
+import { LazyLoaderProviders } from './lazy-loader.providers';
+
+@Module({
+  providers: [...LazyLoaderProviders],
+  exports: [git],
+})
+export class LazyLoaderModule {
+  static forRoot(): DynamicModule {
+    return {
+      module: LazyLoaderModule,
+      providers: [...LazyLoaderProviders],
+      exports: [ILazyLoaderService],
+    };
+  }
+}
+Example 3 - lazy-loader-service-inferface.ts:
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { ContextIdFactory, ModuleRef } from '@nestjs/core';
+import { ILazyLoaderService } from './lazy-loader-service.interface';
+import { Lazy } from './lazy';
+import { AnyConstructor } from './types';
+
+import {
+  PARAMTYPES_METADATA,
+  PROPERTY_DEPS_METADATA,
+  SELF_DECLARED_DEPS_METADATA,
+} from '@nestjs/common/constants';
+import { DependencyIndex } from '@libs/discovery/utils';
+import { Bean } from '@libs/discovery/bean/bean';
+import { ExternalContextCreator } from '@nestjs/core/helpers/external-context-creator';
+
+@Injectable()
+export class LazyLoader implements ILazyLoaderService {
+  private contextId;
+  private readonly logger = new Logger(LazyLoader.name);
+
+  private toLazyLoad: Lazy<any>[] = [];
+  private lateBeans: any[] = [];
+
+  constructor(
+    private readonly moduleRef: ModuleRef,
+    private readonly externalContextCreator: ExternalContextCreator,
+  ) {
+    this.contextId = ContextIdFactory.create();
+  }
+
+  /***
+   * Instantiates lazy providers when module is initialized
+   */
+  async onApplicationBootstrap() {
+    for (const lazy of this.toLazyLoad) {
+      const instance = await this.create(
+        lazy.clazz,
+        ...lazy.assistedInjectionParams,
+      );
+      lazy.instantiate(instance);
+    }
+    this.toLazyLoad = [];
+  }
+  /***
+   * Creates proxy to lazy object, allows overriding of depedencies at creation level
+   * @param clazz
+   */
+  async lazyCreate<T>(clazz: AnyConstructor<T>, ...args: any[]): Promise<T> {
+    const lazy = new Lazy<T>(clazz, this.logger);
+    lazy.assistedInjectionParams = [...args];
+
+    this.toLazyLoad.push(lazy);
+    const res: unknown = new Proxy(lazy, {
+      get: (target, propKey, receiver) => {
+        //Allow only to instantiate lazy, otherwise we try to access proxy
+        if (propKey == 'instantiate') {
+          return lazy.instantiate;
+        }
+        if (propKey == 'instance') {
+          return lazy.instance;
+        }
+
+        return lazy.proxy[propKey];
+      },
+    });
+    return res as T;
+  }
+
+  resolveBean<T>(clazz: AnyConstructor<T>, ...args: any[]): T {
+    const instance = this.create(clazz, ...args);
+    const depIndex = new DependencyIndex(clazz);
+
+    try {
+      const resolved = depIndex.getArray().map((dep) =>
+        this.moduleRef.get(
+          //Either resolve injection token, or constructor dependency type passed
+          dep,
+          {
+            strict: false,
+          },
+        ),
+      );
+
+      const toInject = depIndex.remapDepsToObject(resolved);
+      const bean = new Bean(clazz, toInject, this.externalContextCreator);
+      bean.setInstance(instance);
+
+      return bean.createProxy() as T;
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  async resolve<T>(clazz: AnyConstructor<T>, ...args: any[]): Promise<T> {
+    const types: any[] = Reflect.getMetadata(PARAMTYPES_METADATA, clazz) || [];
+    const selfDeclaredDeps: any[] = Reflect.getMetadata(
+      SELF_DECLARED_DEPS_METADATA,
+      clazz,
+    );
+
+    //Check if there are no decorators used, that override provider to injection token
+    const injectionTokens =
+      selfDeclaredDeps?.reduce((acc, cv, i, arr) => {
+        acc[cv.index] = cv.param;
+        return acc;
+      }, []) || [];
+
+    //Resolved dependencies
+    const resolved = args;
+
+    let index = 0;
+    for (const dep of types) {
+      if (index < resolved.length) {
+        index++;
+        continue;
+      }
+      const res = await this.moduleRef.resolve(
+        //Either resolve injection token, or constructor dependency type passed
+        injectionTokens[index] ?? dep,
+        this.contextId,
+        {
+          strict: false,
+        },
+      );
+
+      resolved.push(res);
+      index++;
+    }
+    return new clazz(...resolved);
+  }
+
+  create<T>(clazz: AnyConstructor<T>, ...args: any[]): T {
+    const types: any[] = Reflect.getMetadata(PARAMTYPES_METADATA, clazz) || [];
+    const selfDeclaredDeps: any[] = Reflect.getMetadata(
+      SELF_DECLARED_DEPS_METADATA,
+      clazz,
+    );
+
+    //Check if there are no decorators used, that override provider to injection token
+    const injectionTokens =
+      selfDeclaredDeps?.reduce((acc, cv, i, arr) => {
+        acc[cv.index] = cv.param;
+        return acc;
+      }, []) || [];
+
+    //Resolved dependencies
+    const resolved = args;
+
+    let index = 0;
+    for (const dep of types) {
+      if (index < resolved.length) {
+        index++;
+        continue;
+      }
+      const res = this.moduleRef.get(
+        //Either resolve injection token, or constructor dependency type passed
+        injectionTokens[index] ?? dep,
+        {
+          strict: false,
+        },
+      );
+      resolved.push(res);
+      index++;
+    }
+    return new clazz(...resolved);
+  }
+
+  async instantiate<T>(clazz: AnyConstructor<T>) {
+    const res = await this.moduleRef.resolve(
+      //Either resolve injection token, or constructor dependency type passed
+      clazz,
+      this.contextId,
+      {
+        strict: false,
+      },
+    );
+
+    return res;
+  }
+}

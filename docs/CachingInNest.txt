@@ -1,0 +1,155 @@
+Everything You Wanted to Know about Caching for Serverless Applications
+October 14th 2019
+
+6min
+
+by @theburningmonk
+
+
+
+
+ 571 reads
+
+
+CLOUD
+#aws#aws-lambda#serverless#aws-lambda-best-practices#cloud-computing#cloud#latest-tech-stories
+
+
+@theburningmonk
+Yan Cui
+
+AWS Serverless Hero. Independent Consultant. Developer Advocate at Lumigo.
+
+Receive Stories from @theburningmonk
+
+SUBSCRIBE
+
+
+Last week, someone asked me “Is caching still relevant for serverless applications?” 
+The assumption there is that Lambda auto-scales by traffic, so do we still need to worry about caching? And if so, where and how do we implement caching?
+So let’s break it down.
+Caching is still VERY relevant
+Yes, Lambda auto-scales by traffic. But it has limits.
+There’s the soft limit of 1000 concurrent executions in most regions. Which you can raise via a support ticket. But there’s also a hard limit on how quickly you can increase the concurrent executions after the initial 1000. In most regions, that limit is 500 per minute.
+Which means, it’ll take you 18 minutes to reach a peak throughput of 10k concurrent executions. This is not a problem if your traffic is either very stable or follows the bell curve so there are no sudden spikes.
+
+
+
+
+However, if your traffic is very spiky then the 500/min limit will be a problem. For instance, if you provide a streaming service for live events, or you’re in the food ordering business. In both cases, caching needs to be an integral part of your application.
+
+
+
+
+And then there’s the question of performance and cost-efficiency.
+Caching improves response time as it cuts out unnecessary roundtrips. In the case of serverless, this also translates to cost savings as most of the technologies we use are pay-per-use.
+Where should you implement caching?
+A typical REST API might look like this:
+
+
+
+
+You have:
+	•	Route53 as the DNS.
+	•	CloudFront as the CDN.
+	•	API Gateway to handle authentication, rate limiting and request validation.
+	•	Lambda to execute business logic.
+	•	DynamoDB as the database.
+In this very typical setup, you can implement caching in a number of places. My general preference is to cache as close to the end-user as possible. Doing so maximises the cost-saving benefit of your caching strategy.
+Caching at the client app
+Given the option, I will always enable caching in the web or mobile app itself.
+
+
+
+
+For data that are immutable or seldom change, this is very effective. For instance, browsers cache images and HTML markups all the time to improve performance. And the HTTP protocol has a rich set of headers to let you fine tune the caching behaviour.
+Often, client-side caching can be implemented easily using techniques such as memoization and encapsulated into reusable libraries.
+However, caching data on the client-side means you have to respond to at least one request per client. This is still very inefficient, and you should be caching responses on the server-side as well.
+
+
+
+
+Caching at CloudFront
+CloudFront has a built-in caching capability. It’s the first place you should consider caching on the server-side.
+
+
+
+
+Caching at the edge is very cost-efficient as it cuts out most of the calls to API Gateway and Lambda. Skipping these calls also improve the end-to-end latency and ultimately the user experience. Also, by caching at the edge, you don’t need to modify your application code to enable caching.
+CloudFront supports caching by query strings, cookies and request headers. It even supports origin failover which can improve system uptime.
+In most cases, this is the only server-side caching I need.
+Caching at API Gateway
+CloudFront is great, but it too has limitations. For example, CloudFront only caches responses to GET, HEAD and OPTIONS requests. If you need to cache other requests then you need to cache responses at API Gateway layer instead.
+
+
+
+
+With API Gateway caching, you can cache responses to any request, including POST, PUT and PATCH. However, this is not enabled by default.
+
+
+
+
+You also have a lot more control over the cache key. For instance, if you have an endpoint with multiple path and/or query string parameters, e.g.
+    GET /{productId}?shipmentId={shipmentId}&userId={userId}
+You can choose which path and query string parameters are included in the cache key. In this case, it’s possible to use only the productId as the cache key. So all requests to the same product ID would get the cached response, even if shipmentId and userId are different.
+One downside to API Gateway caching is that you switch from pay-per-use pricing to paying for uptime. Essentially you’ll be paying for uptime of a Memcached node (that API Gateway manages for you).
+
+
+
+
+API Gateway caching is powerful, but I find few use cases for it. The main use case I have is for caching POST requests.
+Caching in the Lambda function
+You can also cache data in the Lambda function. Anything declared outside the handler function is reused between invocations.
+let html; // this is reused between invocations
+const loadHtml = async () => {
+  if (!html) {
+    // load HTML from somewhere
+    // this is only run during cold start and then cached
+  }
+  return html
+}
+module.exports.handler = async (event) => {
+  return {
+    statusCode: 200,
+    body: await loadHtml(),
+    headers: {
+      'content-type': 'text/html; charset=UTF-8'
+    }
+  }
+}
+You can take advantage of the fact that containers are reused where possible and cache any static configurations or large objects. This is indeed one of the recommendations from the official best practices guide.
+
+
+
+
+However, the cached data is only available for that container and there’s no way to share them across all concurrent executions of a function. This means the overall cache miss can be pretty high – the first call in every container will be a cache miss.
+Alternatively, you can cache the data in Elasticache instead. Doing so would allow cached data to be shared across many functions. But it also requires your functions to be inside a VPC.
+The good news is that the cold start penalty for being inside a VPC will be gone soon. The bad news is that you will still be paying for uptime for the Elasticache cluster. Also, introducing Elasticache would require changes to your application code for both reads and writes.
+If you use DynamoDB, then there is very little reason to use Elasticache for application-level caching. Instead, you should use DAX.
+DAX
+DAX lets you reap the benefit of Elasticache without having to run it yourself. You do still have to pay for uptime for the cache nodes, but they’re fully managed by DynamoDB.
+
+
+
+
+The great thing about DAX is that it requires a minimal change from your code. The main issue I have encountered with DAX is its caching behaviour with regards to query and scan requests. In short, queries and scans have their own caches and they’re not invalidated when the item cache is updated. Which means, they can return stale data immediately after an update.
+Summary
+To summarise, caching is still an important part of any serverless application. It improves your application’s scalability and performance. It also helps you keep your cost in check even when you have to scale to millions of users.
+As we discussed in this post, you can implement caching in every layer of your application. As much as possible, you should implement client-side caching and cache API responses at the edge with CloudFront. When edge caching is not possible then move the caching further into your application to API Gateway then Lambda or DAX.
+If you’re not using DynamoDB, or you need to cache data that are composed of different data sources then also consider introducing Elasticache.
+
+
+
+
+Hi, my name is Yan Cui. I’m an AWS Serverless Hero and the author of . I have run production workload at scale in AWS for nearly 10 years and I have been an architect or principal engineer with a variety of industries ranging from banking, e-commerce, sports streaming to mobile gaming. I currently work as an independent consultant focused on AWS and serverless.
+You can contact me via Email, Twitter and LinkedIn.
+Check out my new course, Complete Guide to AWS Step Functions. In this course, we’ll cover everything you need to know to use AWS Step Functions service effectively. Including basic concepts, HTTP and event triggers, activities, design patterns and best practices.
+Get your copy here.
+
+
+
+
+Come learn about operational BEST PRACTICES for AWS Lambda: CI/CD, testing & debugging functions locally, logging, monitoring, distributed tracing, canary deployments, config management, authentication & authorization, VPC, security, error handling, and more.
+You can also get 40% off the face price with the code ytcui.
+Get your copy .
+Originally published at theburningmonk.com on October 3, 2019

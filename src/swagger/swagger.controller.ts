@@ -1,51 +1,57 @@
 import { Controller, Get, Header, Res } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
 import { FastifyInstance, FastifyReply } from 'fastify';
-
-const customSwaggerHtml = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Swagger UI</title>
-  <link rel="stylesheet" type="text/css" href="/${process.env.NODE_ENV}/static-docs/swagger-ui.css" >
-</head>
-
-<body>
-  <div id="swagger-ui"></div>
-
-  <script src="/${process.env.NODE_ENV}/static-docs/swagger-ui-bundle.js"> </script>
-  <script src="/${process.env.NODE_ENV}/static-docs/swagger-ui-standalone-preset.js"> </script>
-  <script>
-  window.onload = function() {
-    // Build a system
-    const ui = SwaggerUIBundle({
-      url: "/${process.env.NODE_ENV}/api-docs/json", // Update this if you have a custom path for your Swagger JSON
-      dom_id: '#swagger-ui',
-      deepLinking: true,
-      presets: [
-        SwaggerUIBundle.presets.apis,
-        SwaggerUIStandalonePreset
-      ],
-      plugins: [
-        SwaggerUIBundle.plugins.DownloadUrl
-      ],
-      layout: "StandaloneLayout"
-    });
-
-    window.ui = ui;
-  };
-  </script>
-</body>
-</html>
-`;
+import { ConfigService } from '@nestjs/config';
 
 @Controller('api-docs')
 export class SwaggerController {
-  constructor(private adapterHost: HttpAdapterHost) {}
+  constructor(
+    private adapterHost: HttpAdapterHost,
+    private configService: ConfigService,
+  ) {}
 
   @Get('')
   @Header('Content-Type', 'text/html')
   serveSwaggerUI(@Res({ passthrough: true }) res: FastifyReply) {
+    const deployedApiEndpoint = this.configService.get<string>(
+      'deployed_api_endpoint',
+    );
+    const customSwaggerHtml = `<!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <title>Swagger UI</title>
+        <link rel="stylesheet" type="text/css" href="${deployedApiEndpoint}/static-docs/swagger-ui.css" >
+      </head>
+      
+      <body>
+        <div id="swagger-ui"></div>
+      
+        <script src="${deployedApiEndpoint}/static-docs/swagger-ui-bundle.js"> </script>
+        <script src="${deployedApiEndpoint}/static-docs/swagger-ui-standalone-preset.js"> </script>
+        <script>
+        window.onload = function() {
+          // Build a system
+          const ui = SwaggerUIBundle({
+            url: "${deployedApiEndpoint}/api-docs/json", // Update this if you have a custom path for your Swagger JSON
+            dom_id: '#swagger-ui',
+            deepLinking: true,
+            presets: [
+              SwaggerUIBundle.presets.apis,
+              SwaggerUIStandalonePreset
+            ],
+            plugins: [
+              SwaggerUIBundle.plugins.DownloadUrl
+            ],
+            layout: "StandaloneLayout"
+          });
+      
+          window.ui = ui;
+        };
+        </script>
+      </body>
+      </html>
+    `;
     res.type('text/html').send(customSwaggerHtml);
   }
 
@@ -54,10 +60,10 @@ export class SwaggerController {
     res.send(global.swaggerDocument);
   }
 
-  private extractRoutesFromPrintRoutes(
-    routesString: string,
-    baseUrl = 'http://localhost:3000/local/',
-  ) {
+  private extractRoutesFromPrintRoutes(routesString: string) {
+    const deployedApiEndpoint = this.configService.get<string>(
+      'deployed_api_endpoint',
+    );
     const lines = routesString?.split('\n'); // Split into individual route lines
     console.dir(lines);
 
@@ -74,7 +80,7 @@ export class SwaggerController {
         let routePath = trimmedLine.replace(/^\s+|\s+$/g, '');
         routePath = routePath.replace(/^\/|\/$/g, '');
         routePath = currentPath + routePath;
-        routes.push(baseUrl + routePath);
+        routes.push(deployedApiEndpoint + routePath);
       } else if (trimmedLine.startsWith('│')) {
         currentPath += trimmedLine.replace(/[├└─│]/g, '').trim() + '/';
       } else if (trimmedLine.length === 0) {

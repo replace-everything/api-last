@@ -1,13 +1,20 @@
 import { Controller, Get, Param, Patch, Delete, Body } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { PhotosService } from './photos.service';
 import { UpdatePhotoDto } from './dto/update-photo.dto';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { Photo } from './entities/photo.entity';
+import { ModuleRef, OnModuleInit } from '@nestjs/core';
 
-@ApiTags('photos')
-@Controller('photos')
-export class PhotosController {
-  constructor(private readonly photosService: PhotosService) {}
+@ApiTags('')
+@Controller('')
+export class PhotosController implements OnModuleInit {
+  private photosService: PhotosService;
+
+  constructor(private moduleRef: ModuleRef) {}
+
+  onModuleInit() {
+    this.photosService = this.moduleRef.get(PhotosService, { strict: false });
+  }
 
   @Get()
   @ApiOperation({ summary: 'Retrieve all photos' })

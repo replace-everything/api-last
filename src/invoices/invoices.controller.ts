@@ -3,24 +3,35 @@ import {
   Get,
   Param,
   Query,
+  Req,
+  OnModuleInit,
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
-import { PaginationPipe } from '../common/pipes/pagination.pipe';
-import { Invoice } from './entities/invoice.entity';
-import { InvoicesService } from './invoices.service';
+import { ModuleRef } from '@nestjs/core';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
-  ApiParam,
   ApiQuery,
+  ApiParam,
 } from '@nestjs/swagger';
+import { InvoicesService } from './invoices.service';
+import { Invoice } from './entities/invoice.entity';
+import { PaginationPipe } from '../common/pipes/pagination.pipe';
 
-@ApiTags('invoices')
-@Controller('invoices')
-export class InvoicesController {
-  constructor(public readonly invoicesService: InvoicesService) {}
+@ApiTags('')
+@Controller('')
+export class InvoicesController implements OnModuleInit {
+  public invoicesService: InvoicesService;
+
+  constructor(private moduleRef: ModuleRef) {}
+
+  onModuleInit() {
+    this.invoicesService = this.moduleRef.get(InvoicesService, {
+      strict: false,
+    });
+  }
 
   @Get('/')
   @ApiOperation({ summary: 'Retrieve a paginated list of invoices' })
@@ -39,9 +50,13 @@ export class InvoicesController {
     description: 'Paginated list of invoices',
     type: [Invoice],
   })
-  async getAllInvoices(@Query(PaginationPipe) pagination?: PaginationPipe) {
+  async getAllInvoices(
+    @Req() req: Request,
+    @Query(PaginationPipe) pagination?: PaginationPipe,
+  ) {
     try {
-      return await this.invoicesService.findAll(pagination);
+      const schema = req.user?.schema;
+      return await this.invoicesService.findAll(schema, pagination);
     } catch (error) {
       console.error(error);
       throw new HttpException(
@@ -64,9 +79,13 @@ export class InvoicesController {
     type: Invoice,
   })
   @ApiResponse({ status: 404, description: 'Invoice not found' })
-  async findOne(@Param('invid') invid: number): Promise<Invoice> {
+  async findOne(
+    @Req() req: Request,
+    @Param('invid') invid: number,
+  ): Promise<Invoice> {
     try {
-      return await this.invoicesService.findOne(invid);
+      const schema = req.user?.schema;
+      return await this.invoicesService.findOne(schema, invid);
     } catch (error) {
       console.error(error);
       throw new HttpException(
@@ -99,11 +118,17 @@ export class InvoicesController {
     type: [Invoice],
   })
   async findInvoicesByUid(
+    @Req() req: Request,
     @Param('userId') userId: number,
     @Query(PaginationPipe) pagination: PaginationPipe,
   ): Promise<Invoice[]> {
     try {
-      return await this.invoicesService.findInvoicesByUid(userId, pagination);
+      const schema = req.user?.schema;
+      return await this.invoicesService.findInvoicesByUid(
+        schema,
+        userId,
+        pagination,
+      );
     } catch (error) {
       console.error(error);
       throw new HttpException(
